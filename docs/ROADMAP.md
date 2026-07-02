@@ -10,9 +10,12 @@
 
 ## 0.2 Real App Adapter
 
+- Add a `draftkit:init` or equivalent sandbox bridge for downstream apps.
 - Add a React/Vite adapter.
 - Add route and component location capture helpers.
+- Add protected-file checks for database, schema, route, and persistence files during draft mode.
 - Add Playwright-based click-through traces.
+- Support UI-only or deferred-backend drafts as first-class spec semantics.
 
 ## 0.3 Agent Workflow
 
