@@ -65,6 +65,22 @@ test("protected-file check ignores draft-only changes", async () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
+test("protected-file snapshot preserves timestamp when protected files are unchanged", async () => {
+  const appRoot = await createProtectedFixture();
+  await snapshot(appRoot);
+
+  const snapshotPath = path.join(appRoot, ".draftspec/protected-files.snapshot.json");
+  const originalSnapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
+  originalSnapshot.createdAt = "2000-01-01T00:00:00.000Z";
+  await writeFile(snapshotPath, `${JSON.stringify(originalSnapshot, null, 2)}\n`);
+
+  await snapshot(appRoot);
+
+  const refreshedSnapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
+  assert.equal(refreshedSnapshot.createdAt, "2000-01-01T00:00:00.000Z");
+  assert.deepEqual(refreshedSnapshot.files, originalSnapshot.files);
+});
+
 async function createProtectedFixture() {
   const appRoot = await mkdtemp(path.join(tmpdir(), "draftkit-protected-"));
   await mkdir(path.join(appRoot, "data"), { recursive: true });

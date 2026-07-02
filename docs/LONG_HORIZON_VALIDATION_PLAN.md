@@ -9,11 +9,17 @@ Done:
 - First manual sandbox test in two steps:
   - build a baseline Todo app with one task list and a small local database
   - enter draft mode and add `Tasks`, `In progress`, and `Done` columns with fake UI state
+- Second Codex CLI manual sandbox stress test:
+  - ran prompts 1-10 from `docs/MANUAL_TEST_PROMPTS.md`
+  - validated Python/SQLite downstream app support
+  - tested settings placement, column management, categories, approval handoff, and a new Habits & Goals draft page
+  - captured findings in `docs/MANUAL_SANDBOX_TEST_ROUND_2.md`
 - Manual sandbox findings documented in `docs/MANUAL_SANDBOX_TEST.md`.
 - Draft/live lifecycle documented in `docs/DRAFT_TO_LIVE.md`.
 - Reusable downstream bridge implemented through `npm run draftkit:init -- <target-app>`.
 - App-agnostic `.draftspec` validation added.
 - Protected-file snapshot/check guardrails added.
+- Protected-file snapshots preserve timestamps when protected hashes are unchanged.
 - UI-only and deferred-backend draft semantics added.
 - Ralph/DraftKit research captured in `docs/RALPH_DRAFTKIT_FINDINGS.md`.
 - Prompt catalog started in `docs/MANUAL_TEST_PROMPTS.md`.
@@ -31,6 +37,8 @@ DraftKit succeeds only if the agent naturally understands:
 - the human feel-test is a real gate
 
 ## Phase 1: Codex CLI Manual Test Round 2
+
+Status: completed on 2026-07-02. See `docs/MANUAL_SANDBOX_TEST_ROUND_2.md`.
 
 Goal:
 
@@ -74,6 +82,8 @@ Output:
 - what product/code/docs changed because of the test
 
 ## Phase 2: Implement Fixes From Round 2
+
+Status: started.
 
 Goal:
 

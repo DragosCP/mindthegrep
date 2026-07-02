@@ -49,6 +49,15 @@ export async function snapshotProtectedFiles(configPath, snapshotPath) {
     });
   }
 
+  const existingSnapshot = await readSnapshotIfPresent(snapshotPath);
+  if (
+    existingSnapshot?.version === 1 &&
+    typeof existingSnapshot.createdAt === "string" &&
+    sameSnapshotFiles(existingSnapshot.files, snapshot.files)
+  ) {
+    snapshot.createdAt = existingSnapshot.createdAt;
+  }
+
   await mkdir(path.dirname(snapshotPath), { recursive: true });
   await writeFile(snapshotPath, `${stableStringify(snapshot)}\n`);
   console.log(`snapshot: ${snapshotPath} (${snapshot.files.length} files)`);
@@ -134,8 +143,23 @@ async function fileExists(filePath) {
   }
 }
 
+async function readSnapshotIfPresent(snapshotPath) {
+  try {
+    return JSON.parse(await readFile(snapshotPath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT" || error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 async function hashFile(filePath) {
   return createHash("sha256").update(await readFile(filePath)).digest("hex");
+}
+
+function sameSnapshotFiles(left, right) {
+  return Array.isArray(left) && Array.isArray(right) && stableStringify(left) === stableStringify(right);
 }
 
 function stableStringify(value) {

@@ -52,7 +52,9 @@ npm run draftkit:validate
 npm run draftkit:protect:check
 ```
 
-Run `draftkit:protect:snapshot` immediately after init or before draft edits. During review, run `draftkit:protect:check` against that baseline so backend/database mutations cannot be hidden by a late snapshot.
+If the target app has no `package.json`, DraftKit creates a minimal private package manifest for these DraftKit commands. It does not convert the app to Node; it only adds the local command surface agents can invoke during draft review.
+
+Run `draftkit:protect:snapshot` immediately after init or before draft edits. During review, run `draftkit:protect:check` against that baseline so backend/database mutations cannot be hidden by a late snapshot. Re-running snapshot is idempotent when protected file hashes are unchanged, so it does not churn the snapshot timestamp.
 
 During draft mode, UI-only specs are valid with `backendContracts: []`. Deferred backend hints can be recorded with a backend contract marked `current: "deferred"` or `mode: "deferred"`.
 

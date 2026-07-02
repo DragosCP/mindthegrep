@@ -58,11 +58,30 @@ test("draftkit:init refuses invalid target directories", async () => {
   const missingResult = runNode(initScript, [missing], repoRoot);
   assert.notEqual(missingResult.status, 0);
   assert.match(missingResult.stderr, /Target directory does not exist/);
+});
 
-  const noPackageRoot = await mkdtemp(path.join(tmpdir(), "draftkit-no-package-"));
-  const noPackageResult = runNode(initScript, [noPackageRoot], repoRoot);
-  assert.notEqual(noPackageResult.status, 0);
-  assert.match(noPackageResult.stderr, /package\.json/);
+test("draftkit:init can bridge a non-Node Python SQLite app", async () => {
+  const appRoot = await mkdtemp(path.join(tmpdir(), "draftkit-python-app-"));
+  await mkdir(path.join(appRoot, "public"), { recursive: true });
+  await writeFile(path.join(appRoot, "AGENTS.md"), "# Python Todo\n");
+  await writeFile(path.join(appRoot, "app.py"), "print('server')\n");
+  await writeFile(path.join(appRoot, "todo.db"), "sqlite placeholder\n");
+  await writeFile(path.join(appRoot, "public/app.js"), "console.log('ui')\n");
+
+  const result = runNode(initScript, [appRoot], repoRoot);
+  assert.equal(result.status, 0, result.stderr);
+
+  const packageJson = JSON.parse(await readFile(path.join(appRoot, "package.json"), "utf8"));
+  assert.equal(packageJson.name, path.basename(appRoot).toLowerCase());
+  assert.equal(packageJson.private, true);
+  assert.equal(packageJson.scripts["draftkit:validate"], "node scripts/validate-draftspec.mjs");
+  assert.equal(
+    packageJson.scripts["draftkit:protect:check"],
+    "node scripts/check-protected-files.mjs check .draftspec/protected-files.snapshot.json"
+  );
+
+  const protectedConfig = JSON.parse(await readFile(path.join(appRoot, ".draftspec/protected-files.json"), "utf8"));
+  assert.deepEqual(protectedConfig.files, ["app.py", "todo.db"]);
 });
 
 test("installed downstream bridge validates UI-only specs and protects live files", async () => {

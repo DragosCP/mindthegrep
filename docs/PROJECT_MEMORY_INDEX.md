@@ -20,6 +20,24 @@ This file points future agents and humans to the durable context behind the Draf
   - `3ea5c3a` - DraftKit sandbox bridge
   - `84e3424` - draft task board columns
 
+## Second Manual Sandbox
+
+- Context snapshot: `.omx/context/codex-cli-manual-round-2-20260702T183155Z.md`
+- Main report: `docs/MANUAL_SANDBOX_TEST_ROUND_2.md`
+- Sandbox path: `/home/drago/mindthegrep-sandboxes/todo-draftkit-round2`
+- Sandbox commits:
+  - `03b7c8d` - baseline tiny Todo app
+  - `3e62af4` - DraftKit bridge
+  - `84d8311` - three-column board
+  - `e201d0b` - app polish
+  - `74f0eed` - drag/drop movement
+  - `81915ce` - settings placement
+  - `0c6032f` - moved settings placement
+  - `d6b8c0d` - column management
+  - `9034686` - category toggle
+  - `b2b7ebd` - approved always-available categories
+  - `5f303b9` - Habits & Goals draft page
+
 ## Current Product Docs
 
 - MVP PRD: `docs/PRD.md`
