@@ -39,6 +39,29 @@ Draft mode exists so a builder can feel the workflow before backend code is comm
    - Confirm persistence, reload behavior, success paths, and failure paths.
    - Confirm the draft-only protected files/checks are no longer the source of truth.
 
+## Repeatable Loop
+
+Draft mode is not a one-way path. The live app remains the baseline, and a builder can reopen draft mode later from whatever the live app has become.
+
+The expected lifecycle is:
+
+```text
+live
+  -> draft experiment
+  -> discard or approve
+  -> live integration
+  -> new draft experiment
+```
+
+Rules:
+
+- Starting a draft must branch from the current live UI, routes, and data shape.
+- Each draft experiment gets its own `.draftspec` history or snapshot.
+- Unapproved drafts may be discarded without changing live backend behavior.
+- Approved drafts become live behavior only after integration and live verification.
+- After integration, future drafts start from the updated live app, not from stale draft code.
+- If a live implementation reveals a UX problem, reopen draft review instead of patching backend behavior from prose.
+
 ## Commands
 
 The current MVP exposes this shape through scripts:
