@@ -22,9 +22,17 @@
 - Package skills as a Codex plugin.
 - Add OMX-compatible state handoffs.
 - Add draft/live guardrails that block backend edits before approval.
+- Add Ralph-compatible draft PRD generation and backend PRD generation from approved snapshots.
+- Run Codex CLI and Claude Code CLI manual validation rounds from `docs/MANUAL_TEST_PROMPTS.md`.
 
 ## 0.4 Backend Integration
 
 - Generate integration plans from approved specs.
 - Compare generated routes/services against existing backend shape.
 - Add duplicate-route risk checks.
+
+## 0.5 Non-CLI Runner UX
+
+- Explore MCP/plugin/overlay surfaces for Codex Desktop and Claude Code Desktop.
+- Add visible live/draft mode controls for non-terminal users.
+- Validate with first and second manual test rounds in isolated environments.

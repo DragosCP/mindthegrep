@@ -28,7 +28,6 @@ export async function initDraftKit({ targetDir, force = false }) {
 
   const targetRoot = path.resolve(targetDir);
   await assertDirectory(targetRoot, `Target directory does not exist: ${targetDir}`);
-  await assertFile(path.join(targetRoot, "package.json"), "Target app must contain package.json");
 
   const result = {
     targetRoot,
@@ -138,7 +137,7 @@ ${DRAFTKIT_BLOCK_END}
 
 async function updatePackageScripts(targetRoot, { force, result }) {
   const packagePath = path.join(targetRoot, "package.json");
-  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  const packageJson = await readPackageJson(targetRoot);
   packageJson.scripts = packageJson.scripts || {};
 
   const scripts = {
@@ -158,6 +157,34 @@ async function updatePackageScripts(targetRoot, { force, result }) {
   }
 
   await writeFile(packagePath, `${stableStringify(packageJson)}\n`);
+}
+
+async function readPackageJson(targetRoot) {
+  const packagePath = path.join(targetRoot, "package.json");
+  if (await exists(packagePath)) {
+    try {
+      return JSON.parse(await readFile(packagePath, "utf8"));
+    } catch (error) {
+      throw new Error(`Cannot parse package.json: ${error.message}`);
+    }
+  }
+
+  return {
+    name: packageNameFromDir(targetRoot),
+    private: true,
+    scripts: {}
+  };
+}
+
+function packageNameFromDir(dirPath) {
+  const fallback = "draftkit-app";
+  const name = path
+    .basename(dirPath)
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^[._-]+|[._-]+$/g, "");
+
+  return name || fallback;
 }
 
 async function detectProtectedFiles(targetRoot) {
@@ -192,6 +219,10 @@ async function walk(root) {
 
 function matchesProtectedFile(filePath) {
   if (/^data\/[^/]+\.json$/.test(filePath)) return true;
+  if (/^(app|server|main)\.py$/.test(filePath)) return true;
+  if (/^(todo|app|data|database|db)\.(db|sqlite|sqlite3)$/.test(filePath)) return true;
+  if (/^(data|db)\/.+\.(db|sqlite|sqlite3|json)$/.test(filePath)) return true;
+  if (/^src\/(app|db|database|server)\.py$/.test(filePath)) return true;
   if (/^src\/db\.[cm]?[jt]s$/.test(filePath)) return true;
   if (/^src\/server\.[cm]?[jt]s$/.test(filePath)) return true;
   if (/^src\/(api|routes|models|repositories|services)\//.test(filePath)) return true;
@@ -215,16 +246,6 @@ async function assertDirectory(dirPath, message) {
   try {
     const dirStat = await stat(dirPath);
     if (!dirStat.isDirectory()) throw new Error(message);
-  } catch (error) {
-    if (error.code === "ENOENT") throw new Error(message);
-    throw error;
-  }
-}
-
-async function assertFile(filePath, message) {
-  try {
-    const fileStat = await stat(filePath);
-    if (!fileStat.isFile()) throw new Error(message);
   } catch (error) {
     if (error.code === "ENOENT") throw new Error(message);
     throw error;
