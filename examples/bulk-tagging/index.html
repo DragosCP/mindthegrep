@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>DraftKit Bulk Tagging Demo</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <strong>Mind the Grep</strong>
+        <nav>
+          <a aria-current="page">Items</a>
+          <a>Tags</a>
+          <a>Reports</a>
+        </nav>
+      </aside>
+      <section class="workspace">
+        <header class="toolbar">
+          <div>
+            <h1>Items</h1>
+            <p>Draft mode: fake backend, real workflow shell.</p>
+          </div>
+          <button id="select-all">Select 20</button>
+          <button id="bulk-tag" disabled>Tag selected</button>
+        </header>
+        <section id="status" class="status">No items selected.</section>
+        <section id="items" class="items"></section>
+      </section>
+    </main>
+
+    <dialog id="tag-dialog">
+      <form method="dialog">
+        <h2>Apply tag</h2>
+        <label>
+          Tag
+          <select id="tag-select"></select>
+        </label>
+        <label class="check">
+          <input id="simulate-failure" type="checkbox">
+          Simulate failure rollback
+        </label>
+        <menu>
+          <button value="cancel">Cancel</button>
+          <button id="apply-tag" value="default">Apply</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script type="module" src="./app.mjs"></script>
+  </body>
+</html>

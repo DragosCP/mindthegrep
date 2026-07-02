@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "feature": "bulk-tagging",
+  "title": "Bulk Tagging",
+  "description": "Select multiple items, tag them optimistically, and roll back on failure.",
+  "status": "draft",
+  "ui": [
+    {
+      "id": "items-route",
+      "location": "routes.items",
+      "type": "route",
+      "label": "Items"
+    },
+    {
+      "id": "bulk-tag-button",
+      "location": "items.toolbar.bulkActions",
+      "type": "button",
+      "label": "Tag selected"
+    },
+    {
+      "id": "bulk-tag-dialog",
+      "location": "items.dialogs.bulkTag",
+      "type": "dialog",
+      "label": "Apply tag"
+    },
+    {
+      "id": "failure-toggle",
+      "location": "items.dialogs.bulkTag.footer",
+      "type": "checkbox",
+      "label": "Simulate failure"
+    }
+  ],
+  "states": [
+    {
+      "id": "idle",
+      "label": "No items selected"
+    },
+    {
+      "id": "selected",
+      "label": "Items selected"
+    },
+    {
+      "id": "dialog_open",
+      "label": "Bulk tagging dialog open"
+    },
+    {
+      "id": "saving",
+      "label": "Optimistic update pending"
+    },
+    {
+      "id": "success",
+      "label": "Tag applied"
+    },
+    {
+      "id": "rollback",
+      "label": "Optimistic update rolled back"
+    }
+  ],
+  "actions": [
+    {
+      "id": "select-items",
+      "from": "*",
+      "event": "select.items",
+      "to": "selected",
+      "ui": "items-route",
+      "payload": {
+        "selectedCount": 20
+      }
+    },
+    {
+      "id": "open-bulk-tag-dialog",
+      "from": "selected",
+      "event": "click.bulk-tag-button",
+      "to": "dialog_open",
+      "ui": "bulk-tag-button"
+    },
+    {
+      "id": "apply-tag-optimistic",
+      "from": "dialog_open",
+      "event": "submit.bulk-tag-dialog",
+      "to": "saving",
+      "ui": "bulk-tag-dialog",
+      "backendContract": "bulkApplyTags",
+      "optimistic": true,
+      "payload": {
+        "itemIds": "selectedIds",
+        "tagId": "priority"
+      }
+    },
+    {
+      "id": "bulk-tag-success",
+      "from": "saving",
+      "event": "backend.bulkApplyTags.success",
+      "to": "success",
+      "backendContract": "bulkApplyTags"
+    },
+    {
+      "id": "bulk-tag-rollback",
+      "from": "saving",
+      "event": "backend.bulkApplyTags.failure",
+      "to": "rollback",
+      "backendContract": "bulkApplyTags",
+      "rollback": true,
+      "errorCode": "SIMULATED_FAILURE"
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "items.20",
+      "kind": "items",
+      "count": 20
+    },
+    {
+      "id": "tags.default",
+      "kind": "tags",
+      "values": [
+        "priority",
+        "review",
+        "archive"
+      ]
+    }
+  ],
+  "backendContracts": [
+    {
+      "id": "bulkApplyTags",
+      "operation": "bulkApplyTags",
+      "method": "POST",
+      "pathHint": "/items/bulk-tags",
+      "requestShape": {
+        "itemIds": "string[]",
+        "tagId": "string"
+      },
+      "responseShape": {
+        "updatedIds": "string[]",
+        "tagId": "string"
+      },
+      "failureModes": [
+        "validation_error",
+        "partial_failure",
+        "network_failure"
+      ]
+    }
+  ]
+}
