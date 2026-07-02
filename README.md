@@ -16,6 +16,7 @@ The reusable handoff from validated draft to real backend work is defined in [Dr
 
 ```bash
 npm test
+npm run draftkit:validate
 npm run validate:spec
 npm run approve:bulk-tagging
 npm run map:bulk-tagging
@@ -31,6 +32,26 @@ Then open `http://localhost:5173/examples/bulk-tagging/`.
 - `.draftspec/features/` stores draft and approved behavior graphs.
 - `scripts/` contains validation, approval, backend mapping, and dev-server helpers.
 - `.codex/skills/` contains project-local workflow skills for agents.
+
+## Use In Another App
+
+Install the DraftKit bridge into a downstream app:
+
+```bash
+npm run draftkit:init -- /path/to/app
+```
+
+That copies the draft skills, app-local `.draftspec` validator, protected-file checker, and an `AGENTS.md` DraftKit block into the target app. The installed app then has:
+
+```bash
+npm run draftkit:protect:snapshot
+npm run draftkit:validate
+npm run draftkit:protect:check
+```
+
+Run `draftkit:protect:snapshot` immediately after init or before draft edits. During review, run `draftkit:protect:check` against that baseline so backend/database mutations cannot be hidden by a late snapshot.
+
+During draft mode, UI-only specs are valid with `backendContracts: []`. Deferred backend hints can be recorded with a backend contract marked `current: "deferred"` or `mode: "deferred"`.
 
 ## MVP Boundary
 

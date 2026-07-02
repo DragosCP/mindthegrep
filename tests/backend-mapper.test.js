@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   approveSpecGraph,
   createBulkTaggingSpec,
+  createSpecGraph,
   mapApprovedSpecToBackendTasks,
   recordAction
 } from "../src/draftkit/index.js";
@@ -58,3 +59,61 @@ test("backend mapper rejects tampered approved specs", () => {
 
   assert.throws(() => mapApprovedSpecToBackendTasks(approved), /snapshotId does not match/);
 });
+
+test("backend mapper returns no backend tasks for approved UI-only specs", () => {
+  const approved = approveSpecGraph(createUiOnlyTaskBoardSpec(), {
+    approvedAt: "2026-07-02T00:00:00.000Z"
+  });
+
+  const mapped = mapApprovedSpecToBackendTasks(approved);
+
+  assert.equal(mapped.feature, "task-board");
+  assert.equal(mapped.snapshotId, approved.snapshotId);
+  assert.deepEqual(mapped.tasks, []);
+});
+
+test("backend mapper creates a deferred integration task for deferred backend hints", () => {
+  const draft = createUiOnlyTaskBoardSpec();
+  draft.backendContracts.push({
+    id: "persistTaskStatus",
+    current: "deferred",
+    routeHint: "PATCH /tasks/:id/status"
+  });
+  const approved = approveSpecGraph(draft, {
+    approvedAt: "2026-07-02T00:00:00.000Z"
+  });
+
+  const mapped = mapApprovedSpecToBackendTasks(approved);
+
+  assert.deepEqual(mapped.tasks, [
+    {
+      id: "backend:persistTaskStatus",
+      title: "Resolve deferred backend contract persistTaskStatus",
+      snapshotId: approved.snapshotId,
+      backendMode: "deferred",
+      suggestedMethod: null,
+      suggestedPath: "PATCH /tasks/:id/status",
+      requestShape: {},
+      responseShape: {},
+      failureModes: []
+    }
+  ]);
+});
+
+function createUiOnlyTaskBoardSpec() {
+  const draft = createSpecGraph({
+    feature: "task-board",
+    title: "Task Board"
+  });
+  draft.ui.push({ id: "task-board", location: "/tasks", type: "section", label: "Task board" });
+  draft.states.push({ id: "idle", label: "Tasks listed" }, { id: "moved", label: "Task moved locally" });
+  draft.actions.push({
+    id: "move-task",
+    from: "idle",
+    event: "drag.task",
+    to: "moved",
+    ui: "task-board"
+  });
+  draft.fixtures.push({ id: "task-statuses", kind: "localStorage" });
+  return draft;
+}

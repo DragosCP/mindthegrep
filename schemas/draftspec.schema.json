@@ -6,12 +6,36 @@
   "properties": {
     "schemaVersion": { "type": "integer", "const": 1 },
     "feature": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
     "status": { "type": "string", "enum": ["draft", "approved"] },
     "snapshotId": { "type": "string" },
+    "approvedAt": { "type": "string" },
     "ui": { "type": "array" },
     "states": { "type": "array" },
     "actions": { "type": "array" },
     "fixtures": { "type": "array" },
-    "backendContracts": { "type": "array" }
+    "backendContracts": {
+      "type": "array",
+      "description": "Empty for UI-only drafts. Deferred contracts may set current, mode, or status to deferred.",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "operation": { "type": "string" },
+          "current": { "type": "string" },
+          "mode": { "type": "string" },
+          "status": { "type": "string" },
+          "pathHint": { "type": "string" },
+          "routeHint": { "type": "string" },
+          "route": { "type": "string" },
+          "method": { "type": "string" },
+          "requestShape": { "type": "object" },
+          "responseShape": { "type": "object" },
+          "failureModes": { "type": "array" }
+        }
+      }
+    }
   }
 }

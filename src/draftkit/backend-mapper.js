@@ -14,17 +14,18 @@ export function mapApprovedSpecToBackendTasks(spec) {
 
   const contractTasks = spec.backendContracts.map((contract) => ({
     id: `backend:${contract.id}`,
-    title: `Implement ${contract.operation}`,
+    title: contract.operation ? `Implement ${contract.operation}` : `Resolve deferred backend contract ${contract.id}`,
     snapshotId: spec.snapshotId,
-    suggestedMethod: contract.method || "POST",
-    suggestedPath: contract.pathHint || null,
+    backendMode: isDeferredBackendContract(contract) ? "deferred" : "concrete",
+    suggestedMethod: contract.method || (contract.operation ? "POST" : null),
+    suggestedPath: contract.pathHint || contract.routeHint || contract.route || null,
     requestShape: contract.requestShape || {},
     responseShape: contract.responseShape || {},
     failureModes: contract.failureModes || []
   }));
 
   const rollbackActions = spec.actions
-    .filter((action) => action.rollback)
+    .filter((action) => action.rollback && action.backendContract)
     .map((action) => ({
       id: `test:${action.id}`,
       title: `Cover rollback path for ${action.backendContract}`,
@@ -37,4 +38,8 @@ export function mapApprovedSpecToBackendTasks(spec) {
     snapshotId: spec.snapshotId,
     tasks: [...contractTasks, ...rollbackActions]
   };
+}
+
+function isDeferredBackendContract(contract) {
+  return contract.mode === "deferred" || contract.current === "deferred" || contract.status === "deferred";
 }

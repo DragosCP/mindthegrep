@@ -6,6 +6,8 @@
   "description": "Draft UI workflows in the real app shell, approve a behavior graph, then integrate the backend once.",
   "scripts": {
     "test": "node --test tests/*.test.js",
+    "draftkit:init": "node scripts/draftkit-init.mjs",
+    "draftkit:validate": "node scripts/validate-draftspec.mjs",
     "validate:spec": "node scripts/validate-spec.mjs .draftspec/features/bulk-tagging.json",
     "export:bulk-tagging": "node scripts/export-bulk-tagging-spec.mjs",
     "approve:bulk-tagging": "node scripts/approve-spec.mjs .draftspec/features/bulk-tagging.json .draftspec/features/bulk-tagging.approved.json",

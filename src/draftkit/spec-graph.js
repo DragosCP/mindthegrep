@@ -34,7 +34,10 @@ export function addFixture(graph, fixture) {
 }
 
 export function addBackendContract(graph, contract) {
-  requireFields(contract, ["id", "operation"], "backend contract");
+  requireFields(contract, ["id"], "backend contract");
+  if (!contract.operation && !isDeferredBackendContract(contract)) {
+    throw new Error(`backend contract ${contract.id} missing operation`);
+  }
   upsertById(graph.backendContracts, contract);
   return graph;
 }
@@ -82,7 +85,21 @@ export function validateSpecGraph(graph) {
 
   const stateIds = new Set((graph?.states || []).map((state) => state.id));
   const uiIds = new Set((graph?.ui || []).map((ui) => ui.id));
-  const backendContractIds = new Set((graph?.backendContracts || []).map((contract) => contract.id));
+  const backendContractIds = new Set();
+
+  for (const contract of graph?.backendContracts || []) {
+    if (!contract.id) {
+      errors.push("backend contract missing id");
+      continue;
+    }
+    if (backendContractIds.has(contract.id)) {
+      errors.push(`duplicate backend contract id ${contract.id}`);
+    }
+    backendContractIds.add(contract.id);
+    if (!contract.operation && !isDeferredBackendContract(contract)) {
+      errors.push(`backend contract ${contract.id} missing operation`);
+    }
+  }
 
   for (const action of graph?.actions || []) {
     for (const field of ["id", "from", "event", "to"]) {
@@ -104,8 +121,6 @@ export function validateSpecGraph(graph) {
 
   if ((graph?.ui || []).length === 0) errors.push("at least one ui location is required");
   if ((graph?.actions || []).length === 0) errors.push("at least one action is required");
-  if ((graph?.backendContracts || []).length === 0) errors.push("at least one backend contract is required");
-
   if (graph?.status === "approved") {
     if (!graph.snapshotId) errors.push("approved specs require snapshotId");
     if (!graph.approvedAt) errors.push("approved specs require approvedAt");
@@ -149,6 +164,10 @@ function sortKeys(value) {
 
 function copy(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function isDeferredBackendContract(contract) {
+  return contract.mode === "deferred" || contract.current === "deferred" || contract.status === "deferred";
 }
 
 function hashString(value) {

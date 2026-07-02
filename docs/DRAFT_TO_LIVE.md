@@ -62,9 +62,32 @@ Rules:
 - After integration, future drafts start from the updated live app, not from stale draft code.
 - If a live implementation reveals a UX problem, reopen draft review instead of patching backend behavior from prose.
 
+Practically, this means `draftkit:init` is a reusable bridge, not a one-time disposable sandbox. Once installed in a downstream app, every new draft starts from the current live code and writes a new `.draftspec/features/<feature>.json` file. Returning to live mode does not remove DraftKit; it changes the active work from draft-only UI to approved-snapshot backend integration.
+
 ## Commands
 
-The current MVP exposes this shape through scripts:
+Install DraftKit into a downstream app:
+
+```bash
+npm run draftkit:init -- /path/to/app
+```
+
+Inside that app, capture the live baseline before draft edits:
+
+```bash
+npm run draftkit:protect:snapshot
+```
+
+Before draft review, verify the draft against that baseline:
+
+```bash
+npm run draftkit:validate
+npm run draftkit:protect:check
+```
+
+The snapshot command belongs at the start of draft work, immediately after init or before the first draft edit. The check command belongs at review time. Do not create a fresh snapshot after draft changes just to make the check pass.
+
+The current repo still exposes the bulk-tagging vertical slice through scripts:
 
 ```bash
 npm run approve:bulk-tagging
@@ -87,6 +110,9 @@ draftkit verify-live <feature>
 - The integration plan must reference the approved `snapshotId`.
 - Backend work must not be based on loose prose if an approved `.draftspec` exists.
 - If backend constraints force UX behavior changes, return to draft review before implementing the changed workflow.
+- UI-only drafts may use `backendContracts: []`.
+- Deferred backend hints may use a backend contract with `current: "deferred"` or `mode: "deferred"`.
+- Protected-file checks should snapshot live persistence/backend files before draft review and fail if a draft mutates them.
 
 ## Todo Board Example
 

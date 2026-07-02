@@ -63,7 +63,7 @@ This is valuable evidence: draft workflows need explicit protected-file checks, 
 
 ## Follow-Up Work
 
-- Add a reusable `draftkit:init` or adapter installer for downstream apps.
-- Make UI-only/deferred-backend drafts first-class in the schema instead of relying on ad hoc contract hints.
+- Harden the reusable `draftkit:init` adapter installer for downstream apps.
+- Expand UI-only/deferred-backend draft schema documentation.
 - Add a browser click-through trace layer for moving tasks between columns.
-- Add protected-file checks that fail on database/schema/backend mutations during draft mode.
+- Expand protected-file checks that fail on database/schema/backend mutations during draft mode.
