@@ -11,6 +11,7 @@ Mind the Grep is an MVP for a draft-first agent workflow:
 The first vertical slice is a bulk-tagging workflow with optimistic update and rollback behavior.
 
 The reusable handoff from validated draft to real backend work is defined in [Draft To Live Handoff](docs/DRAFT_TO_LIVE.md).
+Longer-term validation memory lives in [Project Memory Index](docs/PROJECT_MEMORY_INDEX.md), [Manual Test Prompts](docs/MANUAL_TEST_PROMPTS.md), [Ralph And DraftKit Findings](docs/RALPH_DRAFTKIT_FINDINGS.md), and [Long Horizon Validation Plan](docs/LONG_HORIZON_VALIDATION_PLAN.md).
 
 ## Run
 
@@ -32,6 +33,8 @@ Then open `http://localhost:5173/examples/bulk-tagging/`.
 - `.draftspec/features/` stores draft and approved behavior graphs.
 - `scripts/` contains validation, approval, backend mapping, and dev-server helpers.
 - `.codex/skills/` contains project-local workflow skills for agents.
+- `docs/MANUAL_TEST_PROMPTS.md` stores intentionally vague prompts for manual validation.
+- `docs/LONG_HORIZON_VALIDATION_PLAN.md` tracks the planned Codex, Claude Code, Ralph, and non-CLI validation rounds.
 
 ## Use In Another App
 
