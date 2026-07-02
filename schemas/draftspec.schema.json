@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DraftKit Feature Spec",
+  "type": "object",
+  "required": ["schemaVersion", "feature", "status", "ui", "states", "actions", "fixtures", "backendContracts"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "feature": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["draft", "approved"] },
+    "snapshotId": { "type": "string" },
+    "ui": { "type": "array" },
+    "states": { "type": "array" },
+    "actions": { "type": "array" },
+    "fixtures": { "type": "array" },
+    "backendContracts": { "type": "array" }
+  }
+}
