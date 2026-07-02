@@ -30,6 +30,8 @@ User click
   -> backend task mapping
 ```
 
+The full live-backend handoff protocol is defined in [Draft To Live Handoff](DRAFT_TO_LIVE.md).
+
 ## Next Architecture Step
 
 Add adapters for real projects:

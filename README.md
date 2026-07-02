@@ -10,6 +10,8 @@ Mind the Grep is an MVP for a draft-first agent workflow:
 
 The first vertical slice is a bulk-tagging workflow with optimistic update and rollback behavior.
 
+The reusable handoff from validated draft to real backend work is defined in [Draft To Live Handoff](docs/DRAFT_TO_LIVE.md).
+
 ## Run
 
 ```bash
