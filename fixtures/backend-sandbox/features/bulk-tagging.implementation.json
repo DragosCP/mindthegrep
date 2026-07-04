@@ -1,0 +1,35 @@
+{
+  "approvedSpecPath": ".draftspec/features/bulk-tagging.approved.json",
+  "contracts": [
+    {
+      "failureModes": [
+        "validation_error",
+        "partial_failure",
+        "network_failure"
+      ],
+      "id": "bulkApplyTags",
+      "method": "POST",
+      "operation": "bulkApplyTags",
+      "path": "/items/bulk-tags",
+      "requestShape": {
+        "itemIds": "string[]",
+        "tagId": "string"
+      },
+      "responseShape": {
+        "tagId": "string",
+        "updatedIds": "string[]"
+      }
+    }
+  ],
+  "feature": "bulk-tagging",
+  "implementedAt": "2026-07-03T19:26:12.859Z",
+  "planPath": ".draftspec/go-live/bulk-tagging.plan.json",
+  "schemaVersion": 1,
+  "snapshotId": "87f0dd9677185722",
+  "source": {
+    "usesApprovedSnapshotOnly": true,
+    "usesRuntimeStateForAuthorization": false
+  },
+  "status": "implemented",
+  "target": "fixture-backend-sandbox"
+}

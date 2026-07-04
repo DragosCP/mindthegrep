@@ -9,6 +9,7 @@ Review the draft as a workflow, not just as code.
 
 ## Checks
 
+- `node ./scripts/draftkit-session.mjs status` reports the current DraftKit mode, feature, approval state, and next actions.
 - The feature is reachable from the real app shell.
 - The path has the fewest reasonable steps.
 - No debug terminal or implementation-facing UI is exposed to end users.

@@ -1,0 +1,264 @@
+{
+  "apiImplications": [
+    "POST /boards/:boardId/layout",
+    "POST /boards/:boardId/tasks/:taskId/move",
+    "POST /boards/:boardId/settings",
+    "POST /boards/:boardId/categories"
+  ],
+  "approvedSpecPath": ".draftspec/features/board-columns.approved.json",
+  "backendTarget": {
+    "path": "fixtures/backend-sandbox/",
+    "reason": "No production backend/API/database target was detected in this repository.",
+    "type": "fixture-backend-sandbox"
+  },
+  "contracts": [
+    {
+      "failureModes": [
+        "validation_error",
+        "conflict",
+        "persistence_failure"
+      ],
+      "id": "saveBoardLayout",
+      "method": "POST",
+      "operation": "saveBoardLayout",
+      "path": "/boards/:boardId/layout",
+      "requestShape": {
+        "boardId": "string",
+        "columns": "BoardColumn[]",
+        "settingsPlacement": "string"
+      },
+      "responseShape": {
+        "columns": "BoardColumn[]",
+        "updatedAt": "string"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "not_found",
+        "conflict"
+      ],
+      "id": "moveTask",
+      "method": "POST",
+      "operation": "moveTask",
+      "path": "/boards/:boardId/tasks/:taskId/move",
+      "requestShape": {
+        "fromColumn": "string",
+        "taskId": "string",
+        "toColumn": "string"
+      },
+      "responseShape": {
+        "column": "string",
+        "taskId": "string"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "max_columns"
+      ],
+      "id": "saveBoardSettings",
+      "method": "POST",
+      "operation": "saveBoardSettings",
+      "path": "/boards/:boardId/settings",
+      "requestShape": {
+        "columns": "BoardColumn[]",
+        "maxColumns": "number"
+      },
+      "responseShape": {
+        "accepted": "boolean",
+        "columns": "BoardColumn[]"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "duplicate_category"
+      ],
+      "id": "saveTaskCategory",
+      "method": "POST",
+      "operation": "saveTaskCategory",
+      "path": "/boards/:boardId/categories",
+      "requestShape": {
+        "color": "string",
+        "label": "string",
+        "taskId": "string"
+      },
+      "responseShape": {
+        "categoryId": "string",
+        "color": "string",
+        "label": "string"
+      }
+    }
+  ],
+  "databaseImplications": [
+    "Fixture backend stores contract-level behavior only; production persistence remains a future adapter task."
+  ],
+  "discovery": {
+    "backendFiles": [
+      "src/draftkit/backend-mapper.js",
+      "tests/backend-mapper.test.js"
+    ],
+    "databaseFiles": [],
+    "hasProductionBackendTarget": false,
+    "productionBackendFiles": [],
+    "productionDatabaseFiles": [],
+    "productionServiceFiles": [],
+    "serviceFiles": [],
+    "testFiles": [
+      "tests/approval.test.js",
+      "tests/backend-mapper.test.js",
+      "tests/bulk-tagging-flow.test.js",
+      "tests/draftkit-gitignore.test.js",
+      "tests/draftkit-session.test.js",
+      "tests/spec-export.test.js",
+      "tests/spec-graph.test.js"
+    ]
+  },
+  "feature": "board-columns",
+  "generatedAt": "2026-07-03T21:01:57.525Z",
+  "implementationOrder": [
+    "Load and validate approved .draftspec snapshot.",
+    "Confirm plan snapshotId matches approved snapshotId.",
+    "Write fixture backend implementation artifact from approved contracts.",
+    "Run DraftKit tests and spec validation."
+  ],
+  "mappedTasks": [
+    {
+      "failureModes": [
+        "validation_error",
+        "conflict",
+        "persistence_failure"
+      ],
+      "id": "backend:saveBoardLayout",
+      "requestShape": {
+        "boardId": "string",
+        "columns": "BoardColumn[]",
+        "settingsPlacement": "string"
+      },
+      "responseShape": {
+        "columns": "BoardColumn[]",
+        "updatedAt": "string"
+      },
+      "snapshotId": "97a4cf0cfbfaf60c",
+      "suggestedMethod": "POST",
+      "suggestedPath": "/boards/:boardId/layout",
+      "title": "Implement saveBoardLayout"
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "not_found",
+        "conflict"
+      ],
+      "id": "backend:moveTask",
+      "requestShape": {
+        "fromColumn": "string",
+        "taskId": "string",
+        "toColumn": "string"
+      },
+      "responseShape": {
+        "column": "string",
+        "taskId": "string"
+      },
+      "snapshotId": "97a4cf0cfbfaf60c",
+      "suggestedMethod": "POST",
+      "suggestedPath": "/boards/:boardId/tasks/:taskId/move",
+      "title": "Implement moveTask"
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "max_columns"
+      ],
+      "id": "backend:saveBoardSettings",
+      "requestShape": {
+        "columns": "BoardColumn[]",
+        "maxColumns": "number"
+      },
+      "responseShape": {
+        "accepted": "boolean",
+        "columns": "BoardColumn[]"
+      },
+      "snapshotId": "97a4cf0cfbfaf60c",
+      "suggestedMethod": "POST",
+      "suggestedPath": "/boards/:boardId/settings",
+      "title": "Implement saveBoardSettings"
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "duplicate_category"
+      ],
+      "id": "backend:saveTaskCategory",
+      "requestShape": {
+        "color": "string",
+        "label": "string",
+        "taskId": "string"
+      },
+      "responseShape": {
+        "categoryId": "string",
+        "color": "string",
+        "label": "string"
+      },
+      "snapshotId": "97a4cf0cfbfaf60c",
+      "suggestedMethod": "POST",
+      "suggestedPath": "/boards/:boardId/categories",
+      "title": "Implement saveTaskCategory"
+    }
+  ],
+  "risks": [
+    "Repo has no production backend target; generated implementation is intentionally fixture-backed.",
+    "Do not treat runtime DraftKit state as authorization for backend edits.",
+    "Do not add duplicate production routes without adapter-specific discovery."
+  ],
+  "schemaVersion": 1,
+  "snapshotId": "97a4cf0cfbfaf60c",
+  "status": "planned",
+  "summary": {
+    "actions": [
+      "open-board-draft",
+      "move-task-to-in-progress",
+      "open-board-settings",
+      "move-settings-to-toolbar",
+      "add-fourth-column",
+      "block-fifth-column",
+      "enable-categories-draft-option",
+      "create-task-with-inline-category",
+      "make-categories-always-available",
+      "prepare-board-columns-go-live"
+    ],
+    "description": "Draft workflow for trying a todo board as columns, moving tasks, iterating board settings placement, enforcing a four-column maximum, and making task categories always available before go-live.",
+    "states": [
+      "columns_visible",
+      "task_moved",
+      "settings_open",
+      "settings_relocated",
+      "column_added",
+      "max_columns_blocked",
+      "category_setting_enabled",
+      "task_created_with_category",
+      "categories_always_available",
+      "ready_for_approval"
+    ],
+    "title": "Board Columns",
+    "uiLocations": [
+      "app-shell",
+      "board-route",
+      "board-toolbar",
+      "board-settings-entry",
+      "board-settings-dialog",
+      "columns-settings-section",
+      "category-settings-toggle",
+      "category-field",
+      "inline-category-creator",
+      "task-card",
+      "task-create-form"
+    ]
+  },
+  "testPlan": [
+    "Validate approved spec snapshot before planning or implementation.",
+    "Reject stale plans when snapshotId differs from the approved spec.",
+    "Exercise fixture backend success and requested failure modes."
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "approvedSpecPath": ".draftspec/features/board-columns.approved.json",
+  "contracts": [
+    {
+      "failureModes": [
+        "validation_error",
+        "conflict",
+        "persistence_failure"
+      ],
+      "id": "saveBoardLayout",
+      "method": "POST",
+      "operation": "saveBoardLayout",
+      "path": "/boards/:boardId/layout",
+      "requestShape": {
+        "boardId": "string",
+        "columns": "BoardColumn[]",
+        "settingsPlacement": "string"
+      },
+      "responseShape": {
+        "columns": "BoardColumn[]",
+        "updatedAt": "string"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "not_found",
+        "conflict"
+      ],
+      "id": "moveTask",
+      "method": "POST",
+      "operation": "moveTask",
+      "path": "/boards/:boardId/tasks/:taskId/move",
+      "requestShape": {
+        "fromColumn": "string",
+        "taskId": "string",
+        "toColumn": "string"
+      },
+      "responseShape": {
+        "column": "string",
+        "taskId": "string"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "max_columns"
+      ],
+      "id": "saveBoardSettings",
+      "method": "POST",
+      "operation": "saveBoardSettings",
+      "path": "/boards/:boardId/settings",
+      "requestShape": {
+        "columns": "BoardColumn[]",
+        "maxColumns": "number"
+      },
+      "responseShape": {
+        "accepted": "boolean",
+        "columns": "BoardColumn[]"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "duplicate_category"
+      ],
+      "id": "saveTaskCategory",
+      "method": "POST",
+      "operation": "saveTaskCategory",
+      "path": "/boards/:boardId/categories",
+      "requestShape": {
+        "color": "string",
+        "label": "string",
+        "taskId": "string"
+      },
+      "responseShape": {
+        "categoryId": "string",
+        "color": "string",
+        "label": "string"
+      }
+    }
+  ],
+  "feature": "board-columns",
+  "implementedAt": "2026-07-03T21:02:03.758Z",
+  "planPath": ".draftspec/go-live/board-columns.plan.json",
+  "schemaVersion": 1,
+  "snapshotId": "97a4cf0cfbfaf60c",
+  "source": {
+    "usesApprovedSnapshotOnly": true,
+    "usesRuntimeStateForAuthorization": false
+  },
+  "status": "implemented",
+  "target": "fixture-backend-sandbox"
+}

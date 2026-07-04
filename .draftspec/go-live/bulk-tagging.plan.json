@@ -1,0 +1,130 @@
+{
+  "apiImplications": [
+    "POST /items/bulk-tags"
+  ],
+  "approvedSpecPath": ".draftspec/features/bulk-tagging.approved.json",
+  "backendTarget": {
+    "path": "fixtures/backend-sandbox/",
+    "reason": "No production backend/API/database target was detected in this repository.",
+    "type": "fixture-backend-sandbox"
+  },
+  "contracts": [
+    {
+      "failureModes": [
+        "validation_error",
+        "partial_failure",
+        "network_failure"
+      ],
+      "id": "bulkApplyTags",
+      "method": "POST",
+      "operation": "bulkApplyTags",
+      "path": "/items/bulk-tags",
+      "requestShape": {
+        "itemIds": "string[]",
+        "tagId": "string"
+      },
+      "responseShape": {
+        "tagId": "string",
+        "updatedIds": "string[]"
+      }
+    }
+  ],
+  "databaseImplications": [
+    "Fixture backend stores contract-level behavior only; production persistence remains a future adapter task."
+  ],
+  "discovery": {
+    "backendFiles": [
+      "src/draftkit/backend-mapper.js",
+      "tests/backend-mapper.test.js"
+    ],
+    "databaseFiles": [],
+    "hasProductionBackendTarget": false,
+    "productionBackendFiles": [],
+    "productionDatabaseFiles": [],
+    "productionServiceFiles": [],
+    "serviceFiles": [],
+    "testFiles": [
+      "tests/approval.test.js",
+      "tests/backend-mapper.test.js",
+      "tests/bulk-tagging-flow.test.js",
+      "tests/draftkit-gitignore.test.js",
+      "tests/draftkit-session.test.js",
+      "tests/spec-export.test.js",
+      "tests/spec-graph.test.js"
+    ]
+  },
+  "feature": "bulk-tagging",
+  "generatedAt": "2026-07-03T19:26:12.571Z",
+  "implementationOrder": [
+    "Load and validate approved .draftspec snapshot.",
+    "Confirm plan snapshotId matches approved snapshotId.",
+    "Write fixture backend implementation artifact from approved contracts.",
+    "Run DraftKit tests and spec validation."
+  ],
+  "mappedTasks": [
+    {
+      "failureModes": [
+        "validation_error",
+        "partial_failure",
+        "network_failure"
+      ],
+      "id": "backend:bulkApplyTags",
+      "requestShape": {
+        "itemIds": "string[]",
+        "tagId": "string"
+      },
+      "responseShape": {
+        "tagId": "string",
+        "updatedIds": "string[]"
+      },
+      "snapshotId": "87f0dd9677185722",
+      "suggestedMethod": "POST",
+      "suggestedPath": "/items/bulk-tags",
+      "title": "Implement bulkApplyTags"
+    },
+    {
+      "event": "backend.bulkApplyTags.failure",
+      "id": "test:bulk-tag-rollback",
+      "snapshotId": "87f0dd9677185722",
+      "title": "Cover rollback path for bulkApplyTags"
+    }
+  ],
+  "risks": [
+    "Repo has no production backend target; generated implementation is intentionally fixture-backed.",
+    "Do not treat runtime DraftKit state as authorization for backend edits.",
+    "Do not add duplicate production routes without adapter-specific discovery."
+  ],
+  "schemaVersion": 1,
+  "snapshotId": "87f0dd9677185722",
+  "status": "planned",
+  "summary": {
+    "actions": [
+      "select-items",
+      "open-bulk-tag-dialog",
+      "apply-tag-optimistic",
+      "bulk-tag-success",
+      "bulk-tag-rollback"
+    ],
+    "description": "Select multiple items, tag them optimistically, and roll back on failure.",
+    "states": [
+      "idle",
+      "selected",
+      "dialog_open",
+      "saving",
+      "success",
+      "rollback"
+    ],
+    "title": "Bulk Tagging",
+    "uiLocations": [
+      "items-route",
+      "bulk-tag-button",
+      "bulk-tag-dialog",
+      "failure-toggle"
+    ]
+  },
+  "testPlan": [
+    "Validate approved spec snapshot before planning or implementation.",
+    "Reject stale plans when snapshotId differs from the approved spec.",
+    "Exercise fixture backend success and requested failure modes."
+  ]
+}

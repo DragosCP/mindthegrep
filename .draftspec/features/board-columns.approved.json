@@ -1,0 +1,390 @@
+{
+  "actions": [
+    {
+      "event": "draftkit.open",
+      "from": "*",
+      "id": "open-board-draft",
+      "payload": {
+        "columns": [
+          "tasks",
+          "in_progress",
+          "done"
+        ],
+        "source": "generic-draft-host"
+      },
+      "to": "columns_visible",
+      "ui": "board-route"
+    },
+    {
+      "backendContract": "moveTask",
+      "event": "drag.task-card",
+      "from": "columns_visible",
+      "id": "move-task-to-in-progress",
+      "payload": {
+        "fromColumn": "tasks",
+        "taskId": "task-1",
+        "toColumn": "in_progress"
+      },
+      "to": "task_moved",
+      "ui": "task-card"
+    },
+    {
+      "event": "click.board-settings-entry",
+      "from": "task_moved",
+      "id": "open-board-settings",
+      "to": "settings_open",
+      "ui": "board-settings-entry"
+    },
+    {
+      "event": "move.settings-entry",
+      "from": "settings_open",
+      "id": "move-settings-to-toolbar",
+      "payload": {
+        "from": "sidebar",
+        "to": "board-toolbar"
+      },
+      "to": "settings_relocated",
+      "ui": "board-toolbar"
+    },
+    {
+      "backendContract": "saveBoardSettings",
+      "event": "settings.columns.add",
+      "from": "settings_relocated",
+      "id": "add-fourth-column",
+      "payload": {
+        "column": "almost_done",
+        "maxColumns": 4
+      },
+      "to": "column_added",
+      "ui": "columns-settings-section"
+    },
+    {
+      "event": "settings.columns.add.blocked",
+      "from": "column_added",
+      "id": "block-fifth-column",
+      "payload": {
+        "attemptedColumn": "blocked_extra",
+        "reason": "max_columns"
+      },
+      "to": "max_columns_blocked",
+      "ui": "columns-settings-section"
+    },
+    {
+      "event": "settings.categories.enable",
+      "from": "max_columns_blocked",
+      "id": "enable-categories-draft-option",
+      "payload": {
+        "draftOnlySetting": true
+      },
+      "to": "category_setting_enabled",
+      "ui": "category-settings-toggle"
+    },
+    {
+      "backendContract": "saveTaskCategory",
+      "event": "task.create.category.inline",
+      "from": "category_setting_enabled",
+      "id": "create-task-with-inline-category",
+      "payload": {
+        "category": "Design",
+        "color": "#4f7f68",
+        "title": "Polish board empty state"
+      },
+      "to": "task_created_with_category",
+      "ui": "task-create-form"
+    },
+    {
+      "event": "settings.categories.remove-toggle",
+      "from": "task_created_with_category",
+      "id": "make-categories-always-available",
+      "payload": {
+        "categoryField": "always_visible",
+        "categorySettingRemoved": true
+      },
+      "to": "categories_always_available",
+      "ui": "category-field"
+    },
+    {
+      "backendContract": "saveBoardLayout",
+      "event": "draft.prepare-approval",
+      "from": "categories_always_available",
+      "id": "prepare-board-columns-go-live",
+      "payload": {
+        "approvalReady": true
+      },
+      "to": "ready_for_approval",
+      "ui": "board-route"
+    }
+  ],
+  "approvedAt": "2026-07-03T21:05:00.000Z",
+  "backendContracts": [
+    {
+      "failureModes": [
+        "validation_error",
+        "conflict",
+        "persistence_failure"
+      ],
+      "id": "saveBoardLayout",
+      "method": "POST",
+      "operation": "saveBoardLayout",
+      "pathHint": "/boards/:boardId/layout",
+      "requestShape": {
+        "boardId": "string",
+        "columns": "BoardColumn[]",
+        "settingsPlacement": "string"
+      },
+      "responseShape": {
+        "columns": "BoardColumn[]",
+        "updatedAt": "string"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "not_found",
+        "conflict"
+      ],
+      "id": "moveTask",
+      "method": "POST",
+      "operation": "moveTask",
+      "pathHint": "/boards/:boardId/tasks/:taskId/move",
+      "requestShape": {
+        "fromColumn": "string",
+        "taskId": "string",
+        "toColumn": "string"
+      },
+      "responseShape": {
+        "column": "string",
+        "taskId": "string"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "max_columns"
+      ],
+      "id": "saveBoardSettings",
+      "method": "POST",
+      "operation": "saveBoardSettings",
+      "pathHint": "/boards/:boardId/settings",
+      "requestShape": {
+        "columns": "BoardColumn[]",
+        "maxColumns": "number"
+      },
+      "responseShape": {
+        "accepted": "boolean",
+        "columns": "BoardColumn[]"
+      }
+    },
+    {
+      "failureModes": [
+        "validation_error",
+        "duplicate_category"
+      ],
+      "id": "saveTaskCategory",
+      "method": "POST",
+      "operation": "saveTaskCategory",
+      "pathHint": "/boards/:boardId/categories",
+      "requestShape": {
+        "color": "string",
+        "label": "string",
+        "taskId": "string"
+      },
+      "responseShape": {
+        "categoryId": "string",
+        "color": "string",
+        "label": "string"
+      }
+    }
+  ],
+  "description": "Draft workflow for trying a todo board as columns, moving tasks, iterating board settings placement, enforcing a four-column maximum, and making task categories always available before go-live.",
+  "feature": "board-columns",
+  "fixtures": [
+    {
+      "columns": [
+        {
+          "id": "tasks",
+          "label": "Tasks"
+        },
+        {
+          "id": "in_progress",
+          "label": "In progress"
+        },
+        {
+          "id": "done",
+          "label": "Done"
+        },
+        {
+          "id": "almost_done",
+          "label": "Almost done"
+        }
+      ],
+      "id": "board.columns",
+      "kind": "board-columns",
+      "maxColumns": 4
+    },
+    {
+      "id": "board.tasks",
+      "items": [
+        {
+          "category": "Ops",
+          "column": "tasks",
+          "id": "task-1",
+          "title": "Write launch checklist"
+        },
+        {
+          "category": "Design",
+          "column": "in_progress",
+          "id": "task-2",
+          "title": "Polish board empty state"
+        },
+        {
+          "category": "QA",
+          "column": "done",
+          "id": "task-3",
+          "title": "Verify rollback path"
+        }
+      ],
+      "kind": "tasks"
+    },
+    {
+      "id": "board.categories",
+      "kind": "categories",
+      "values": [
+        {
+          "color": "#4f7f68",
+          "label": "Design"
+        },
+        {
+          "color": "#6f5f90",
+          "label": "Ops"
+        },
+        {
+          "color": "#986b3f",
+          "label": "QA"
+        }
+      ]
+    },
+    {
+      "current": "board-toolbar",
+      "id": "board.settings-placement",
+      "kind": "settings-placement",
+      "previous": [
+        "sidebar"
+      ]
+    }
+  ],
+  "schemaVersion": 1,
+  "snapshotId": "97a4cf0cfbfaf60c",
+  "states": [
+    {
+      "id": "columns_visible",
+      "label": "Board shows Tasks, In progress, and Done columns"
+    },
+    {
+      "id": "task_moved",
+      "label": "Task moved between columns with draft-local behavior"
+    },
+    {
+      "id": "settings_open",
+      "label": "Board settings are open"
+    },
+    {
+      "id": "settings_relocated",
+      "label": "Settings entry moved to the board toolbar"
+    },
+    {
+      "id": "column_added",
+      "label": "Fourth Almost done column added"
+    },
+    {
+      "id": "max_columns_blocked",
+      "label": "Fifth column attempt blocked by max-four rule"
+    },
+    {
+      "id": "category_setting_enabled",
+      "label": "Category setting enabled during draft exploration"
+    },
+    {
+      "id": "task_created_with_category",
+      "label": "Task created with inline category and color"
+    },
+    {
+      "id": "categories_always_available",
+      "label": "Category setting removed and categories always available"
+    },
+    {
+      "id": "ready_for_approval",
+      "label": "Board columns draft ready for approval"
+    }
+  ],
+  "status": "approved",
+  "title": "Board Columns",
+  "ui": [
+    {
+      "id": "app-shell",
+      "label": "Todo app shell",
+      "location": "app.shell",
+      "type": "shell"
+    },
+    {
+      "id": "board-route",
+      "label": "Board route",
+      "location": "routes.board",
+      "type": "route"
+    },
+    {
+      "id": "board-toolbar",
+      "label": "Board toolbar",
+      "location": "board.toolbar",
+      "type": "toolbar"
+    },
+    {
+      "id": "board-settings-entry",
+      "label": "Board settings entry",
+      "location": "board.toolbar.settings",
+      "type": "button"
+    },
+    {
+      "id": "board-settings-dialog",
+      "label": "Board settings dialog",
+      "location": "board.dialogs.settings",
+      "type": "dialog"
+    },
+    {
+      "id": "columns-settings-section",
+      "label": "Columns settings section",
+      "location": "board.dialogs.settings.columns",
+      "type": "form-section"
+    },
+    {
+      "id": "category-settings-toggle",
+      "label": "Draft category toggle",
+      "location": "board.dialogs.settings.categories.toggle",
+      "type": "toggle"
+    },
+    {
+      "id": "category-field",
+      "label": "Task category field",
+      "location": "board.taskForm.category",
+      "type": "select"
+    },
+    {
+      "id": "inline-category-creator",
+      "label": "Inline category creator",
+      "location": "board.taskForm.category.createInline",
+      "type": "inline-form"
+    },
+    {
+      "id": "task-card",
+      "label": "Task card",
+      "location": "board.columns.task.card",
+      "type": "card"
+    },
+    {
+      "id": "task-create-form",
+      "label": "Create task form",
+      "location": "board.taskForm",
+      "type": "form"
+    }
+  ]
+}

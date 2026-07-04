@@ -1,0 +1,133 @@
+# DraftKit Button Workflow
+
+Created: 2026-07-03
+Updated: 2026-07-03
+
+## Purpose
+
+DraftKit exposes a session-native workflow surface for agents. Codex users can invoke project-local `$draft-*` skills, and CI or tests can call the matching npm scripts. Both surfaces use the same shared runtime in `scripts/draftkit-session.mjs`.
+
+Use `node ./scripts/draftkit-session.mjs ...` as the reliable button command from Codex Desktop, WSL, and Linux sessions. Npm aliases remain available for WSL/Linux shells and CI, but Windows shells launched from a WSL UNC workspace can fall back to `C:\Windows` for relative npm script paths.
+
+The buttons coordinate draft sessions. They do not weaken the core safety rule: live integration requires an approved `.draftspec` snapshot with `status: "approved"` and `snapshotId`.
+
+## Button Set
+
+| Button | Reliable Command | Npm Alias | Mutates Runtime State | Requires Approved Snapshot |
+| --- | --- | --- | --- | --- |
+| `draft-status` | `node ./scripts/draftkit-session.mjs status` | `npm run draftkit:status` | No | No |
+| `draft-open` | `node ./scripts/draftkit-session.mjs open <feature>` | `npm run draftkit:open -- <feature>` | Yes | No |
+| `draft-cancel` | `node ./scripts/draftkit-session.mjs cancel` | `npm run draftkit:cancel` | Yes | No |
+| `draft-plan-to-go-live` | `node ./scripts/draftkit-session.mjs plan-to-go-live <feature>` | `npm run draftkit:plan-to-go-live -- <feature>` | Logs only | Yes |
+| `draft-implement-to-live` | `node ./scripts/draftkit-session.mjs implement-to-live <feature>` | `npm run draftkit:implement-to-live -- <feature>` | Logs only | Yes |
+
+## Runtime State
+
+DraftKit runtime state is local operational data:
+
+```text
+.draftspec/state/draftkit-active.json
+.draftspec/state/sessions/<session-id>/draftkit-state.json
+.draftspec/logs/session-history.jsonl
+```
+
+These files may contain absolute paths, process IDs, preview ports, prompts, and local session history. They are ignored by git through `.gitignore`.
+
+Runtime state can report that a draft session is active. It cannot authorize backend implementation. Approved `.draftspec` snapshots are the go-live authority.
+
+## Product Artifacts
+
+Reviewable product artifacts are separate from runtime state:
+
+```text
+.draftspec/features/<feature>.json
+.draftspec/features/<feature>.approved.json
+.draftspec/go-live/<feature>.plan.md
+.draftspec/go-live/<feature>.plan.json
+fixtures/backend-sandbox/features/<feature>.implementation.json
+```
+
+The fixture backend sandbox is used in this repository because there is no production backend/API/database target. It records approved contracts in a realistic implementation artifact without pretending the app has a live backend.
+
+## `draft-status`
+
+`draft-status` is read-only. It reports:
+
+- mode: `live`, `draft`, or `unknown`
+- state: `none`, `active`, `inactive`, or `stale`
+- feature
+- preview URL and health when known
+- draft spec path and validation state
+- approved spec path, approval state, and snapshot ID
+- stale reasons
+- next valid actions
+
+Status treats missing session files, cwd drift, unhealthy previews, and dead recorded preview processes as stale state. It does not delete or repair state by itself.
+
+## `draft-open`
+
+`draft-open <feature>` creates or resumes draft mode.
+
+It:
+
+- locates or creates `.draftspec/features/<feature>.json`
+- starts a preview server or reuses a healthy preview
+- opens `examples/<feature>/` when that example exists
+- otherwise opens the generic DraftKit host at `/draftkit/<feature>/`, rendering the current draft spec as a scaffold preview
+- writes both the session state and active mirror
+- appends local session history
+- reports the preview, spec path, approval state, advisory guardrail level, and next actions
+
+While draft mode is active, agents should keep work inside the existing app shell, use fake/local state, and avoid real backend, database, schema, queue, or production API edits unless an approved go-live workflow is running.
+
+## `draft-cancel`
+
+`draft-cancel` exits draft mode without deleting draft work.
+
+It:
+
+- marks the session cancelled
+- removes `.draftspec/state/draftkit-active.json`
+- appends a session-history event
+- preserves draft and approved specs
+- stops only a preview process DraftKit started and can still verify by identity
+
+Cancel refuses to kill unknown processes or processes that only match by PID.
+
+## `draft-plan-to-go-live`
+
+`draft-plan-to-go-live <feature>` creates implementation plan artifacts from an approved snapshot.
+
+It refuses to proceed unless `.draftspec/features/<feature>.approved.json` validates with `status: "approved"` and `snapshotId`.
+
+It writes:
+
+```text
+.draftspec/go-live/<feature>.plan.md
+.draftspec/go-live/<feature>.plan.json
+```
+
+The plan includes the approved snapshot ID, behavior summary, backend contracts, repository boundary discovery, database and API implications, tests, risks, and implementation order. It does not implement.
+
+## `draft-implement-to-live`
+
+`draft-implement-to-live <feature>` implements only approved contracts.
+
+It:
+
+- requires a valid approved spec
+- uses an existing go-live plan when present
+- creates a plan first when none exists
+- rejects stale plans whose `snapshotId` differs from the approved spec
+- writes fixture backend implementation artifacts for this no-backend repo
+
+The implementation artifact records that authorization came from the approved snapshot, not runtime state.
+
+## Failure Modes
+
+- Unapproved drafts are refused by both go-live buttons.
+- Invalid approved specs are refused.
+- Stale plans are rejected before implementation.
+- `draft-status` reports stale state instead of trusting broken runtime files.
+- `draft-cancel` does not kill foreign or unverifiable processes.
+- Runtime state and logs are ignored by git, while product specs, approved snapshots, go-live plans, and fixture implementation artifacts remain reviewable.

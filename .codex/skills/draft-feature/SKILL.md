@@ -9,6 +9,8 @@ Build the feature as a draft-only workflow.
 
 ## Rules
 
+- If a DraftKit session is already active, use `node ./scripts/draftkit-session.mjs status` as the session evidence before editing.
+- If no session is active and the user is starting a draft, open one with `node ./scripts/draftkit-session.mjs open <feature>`.
 - Preserve the app shell, navigation, and shared components.
 - Do not edit real backend routes, database code, migrations, or production API clients.
 - Use local fixtures, local state, or fake service adapters.

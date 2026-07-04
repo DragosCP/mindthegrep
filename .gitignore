@@ -7,3 +7,6 @@
 .codex/skills/.system/**
 !.codex/prompts/
 !.codex/prompts/**
+analysis/codex-session-history-analysis.md
+.draftspec/state/
+.draftspec/logs/
