@@ -25,7 +25,16 @@
 - Future: package the buttons as a Codex plugin with optional hooks for draft/live guardrails.
 - Future: add Claude Code `/draft-*` wrappers if Claude support is in scope.
 
-## 0.4 Backend Integration
+## 0.4 Packaging And Distribution
+
+- Replace the current GitHub-branch copy install test with a versioned npm package.
+- Target developer flow: `npm install -D draftkit` followed by `npx draftkit init`.
+- Keep reusable runtime code in the package where possible.
+- Have `draftkit init` write small project-local Codex skill wrappers under `.codex/skills/draft-*`.
+- Have `draftkit init` add minimal package scripts, `.gitignore` entries, and `.draftspec/` directories.
+- Document upgrade behavior so projects can refresh wrappers without overwriting local product specs.
+
+## 0.5 Backend Integration
 
 - Extend go-live discovery with real app adapters.
 - Compare generated routes/services against existing backend shape in production repositories.

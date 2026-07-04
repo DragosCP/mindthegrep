@@ -1,7 +1,7 @@
 # DraftKit Button Workflow
 
 Created: 2026-07-03
-Updated: 2026-07-03
+Updated: 2026-07-04
 
 ## Purpose
 
@@ -10,6 +10,21 @@ DraftKit exposes a session-native workflow surface for agents. Codex users can i
 Use `node ./scripts/draftkit-session.mjs ...` as the reliable button command from Codex Desktop, WSL, and Linux sessions. Npm aliases remain available for WSL/Linux shells and CI, but Windows shells launched from a WSL UNC workspace can fall back to `C:\Windows` for relative npm script paths.
 
 The buttons coordinate draft sessions. They do not weaken the core safety rule: live integration requires an approved `.draftspec` snapshot with `status: "approved"` and `snapshotId`.
+
+## Target Install Model
+
+The current GitHub-branch copy workflow is a manual acceptance scaffold, not the final product install story.
+
+Target developer flow:
+
+```bash
+npm install -D draftkit
+npx draftkit init
+```
+
+`draftkit init` should install project-local Codex skill wrappers under `.codex/skills/draft-*`, add minimal package scripts, update `.gitignore`, create `.draftspec/` directories, and keep reusable runtime code inside the npm package where possible.
+
+Codex `$draft-*` buttons still require project-local skill files, so the npm package does not remove the init step. It makes the init step reliable, repeatable, versioned, and easy to upgrade.
 
 ## Button Set
 
