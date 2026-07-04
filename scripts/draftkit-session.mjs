@@ -2,7 +2,7 @@
 import { execFile, spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { randomBytes } from "node:crypto";
-import { existsSync, openSync } from "node:fs";
+import { closeSync, existsSync, openSync } from "node:fs";
 import {
   access,
   appendFile,
@@ -28,6 +28,7 @@ import {
 } from "../src/draftkit/index.js";
 
 const DEFAULT_PORT = 5173;
+const DEFAULT_PREVIEW_HOST = "127.0.0.1";
 const STATE_SCHEMA_VERSION = 1;
 const PREVIEW_TIMEOUT_MS = 5000;
 const FEATURE_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -918,61 +919,110 @@ function fingerprintText(value) {
 
 async function ensurePreview(cwd, workspaceRoot, feature, sessionId, options) {
   const previewPath = draftPreviewPath(workspaceRoot, feature);
-  const urlForPort = (port) => `http://localhost:${port}${previewPath}`;
+  const previewHost = options.previewHost || process.env.DRAFTKIT_PREVIEW_HOST || DEFAULT_PREVIEW_HOST;
+  const urlForPort = (port) => `${previewOrigin(previewHost, port)}${previewPath}`;
   const livePreview = await inspectLivePreview(cwd, null);
-
-  const port = await findAvailablePort(DEFAULT_PORT);
-  const url = urlForPort(port);
   const paths = draftkitPaths(cwd);
   await mkdir(paths.logsDir, { recursive: true });
-  const logPath = join(paths.logsDir, `${sessionId}-preview.log`);
+
+  let lastFailure = null;
+  for (let port = DEFAULT_PORT; port < DEFAULT_PORT + 50; port += 1) {
+    if (livePreview.owner !== "none" && livePreview.port === port) {
+      lastFailure = `port ${port} is already serving the live preview`;
+      continue;
+    }
+    if (await portInUse(port, previewHost)) {
+      lastFailure = `port ${port} is unavailable on ${previewHost}`;
+      continue;
+    }
+
+    const url = urlForPort(port);
+    const attempt = startPreviewProcess({
+      cwd,
+      workspaceRoot,
+      feature,
+      sessionId,
+      port,
+      previewHost,
+      paths,
+      now: options.now
+    });
+
+    const identity = await waitForPreviewIdentity(
+      attempt.processInfo,
+      workspaceRoot,
+      options.previewTimeoutMs || PREVIEW_TIMEOUT_MS
+    );
+    if (!identity.matched) {
+      lastFailure = `port ${port} did not verify DraftKit identity: ${identity.reason}`;
+      await stopPreviewAttempt(attempt.child);
+      continue;
+    }
+
+    const routeHealthy = await waitForHealthyUrl(url, options.previewTimeoutMs || PREVIEW_TIMEOUT_MS);
+    if (!routeHealthy) {
+      lastFailure = `port ${port} verified identity but did not serve ${url}`;
+      await stopPreviewAttempt(attempt.child);
+      continue;
+    }
+
+    return {
+      preview: { url, port, owner: "draftkit" },
+      livePreview,
+      process: attempt.processInfo
+    };
+  }
+
+  throw new Error(
+    `No DraftKit-owned preview port found from ${DEFAULT_PORT} to ${DEFAULT_PORT + 49}${
+      lastFailure ? `; last failure: ${lastFailure}` : ""
+    }`
+  );
+}
+
+function startPreviewProcess({ cwd, workspaceRoot, feature, sessionId, port, previewHost, paths, now }) {
+  const logPath = join(paths.logsDir, `${sessionId}-preview-${port}.log`);
   const fd = openSync(logPath, "a");
   const previewServerPath = join(dirname(__filename), "draftkit-preview-server.mjs");
   const previewToken = randomBytes(24).toString("hex");
-  const child = spawn(process.execPath, [previewServerPath], {
-    cwd: workspaceRoot,
-    detached: true,
-    env: {
-      ...process.env,
-      PORT: String(port),
-      DRAFTKIT_FEATURE: feature,
-      DRAFTKIT_SESSION_ID: sessionId,
-      DRAFTKIT_PREVIEW_TOKEN: previewToken
-    },
-    stdio: ["ignore", fd, fd]
-  });
-  child.unref();
+  try {
+    const child = spawn(process.execPath, [previewServerPath], {
+      cwd: workspaceRoot,
+      detached: true,
+      env: {
+        ...process.env,
+        PORT: String(port),
+        DRAFTKIT_PREVIEW_HOST: previewHost,
+        DRAFTKIT_FEATURE: feature,
+        DRAFTKIT_SESSION_ID: sessionId,
+        DRAFTKIT_PREVIEW_TOKEN: previewToken
+      },
+      stdio: ["ignore", fd, fd]
+    });
+    child.unref();
 
-  const processInfo = {
-    pid: child.pid,
-    cwd: workspaceRoot,
-    command: `${process.execPath} scripts/draftkit-preview-server.mjs`,
-    startedAt: isoNow(options.now),
-    startedBy: "draft-open",
-    previewIdentity: {
-      url: `http://localhost:${port}/__draftkit/preview-identity`,
-      token: previewToken,
-      sessionId,
-      feature,
-      cwd: workspaceRoot
-    },
-    logPath: toRelative(cwd, logPath)
-  };
-
-  const identity = await waitForPreviewIdentity(processInfo, workspaceRoot, options.previewTimeoutMs || PREVIEW_TIMEOUT_MS);
-  if (!identity.matched) {
-    throw new Error(`Preview server identity did not become healthy at ${processInfo.previewIdentity.url}: ${identity.reason}`);
+    return {
+      child,
+      processInfo: {
+        pid: child.pid,
+        cwd: workspaceRoot,
+        command: `${process.execPath} scripts/draftkit-preview-server.mjs`,
+        startedAt: isoNow(now),
+        startedBy: "draft-open",
+        previewIdentity: {
+          url: `${previewOrigin(previewHost, port)}/__draftkit/preview-identity`,
+          token: previewToken,
+          sessionId,
+          feature,
+          cwd: workspaceRoot,
+          host: previewHost
+        },
+        logPath: toRelative(cwd, logPath)
+      }
+    };
+  } finally {
+    closeSync(fd);
   }
-  const routeHealthy = await waitForHealthyUrl(url, options.previewTimeoutMs || PREVIEW_TIMEOUT_MS);
-  if (!routeHealthy) {
-    throw new Error(`Preview server route did not become healthy at ${url}`);
-  }
-
-  return {
-    preview: { url, port, owner: "draftkit" },
-    livePreview,
-    process: processInfo
-  };
 }
 
 async function inspectPreview(state, cwd) {
@@ -993,22 +1043,23 @@ async function inspectPreview(state, cwd) {
   };
 }
 
-async function findAvailablePort(start) {
-  for (let port = start; port < start + 50; port += 1) {
-    if (!(await portInUse(port))) return port;
-  }
-  throw new Error(`No available port found from ${start} to ${start + 49}`);
-}
-
-function portInUse(port) {
+function portInUse(port, host = DEFAULT_PREVIEW_HOST) {
   return new Promise((resolvePort) => {
     const server = createServer();
     server.once("error", () => resolvePort(true));
     server.once("listening", () => {
       server.close(() => resolvePort(false));
     });
-    server.listen(port, "127.0.0.1");
+    server.listen(port, host);
   });
+}
+
+function previewOrigin(host, port) {
+  return `http://${formatHost(host)}:${port}`;
+}
+
+function formatHost(host) {
+  return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 }
 
 async function waitForPreviewIdentity(processInfo, expectedCwd, timeoutMs) {
@@ -1017,9 +1068,32 @@ async function waitForPreviewIdentity(processInfo, expectedCwd, timeoutMs) {
   while (Date.now() < deadline) {
     lastStatus = await previewIdentityStatus(processInfo, expectedCwd);
     if (lastStatus.matched) return lastStatus;
+    if (processInfo?.pid && !(await processAlive(processInfo.pid))) {
+      return {
+        matched: false,
+        reason: `preview process ${processInfo.pid} exited before identity verified: ${lastStatus.reason}`
+      };
+    }
     await new Promise((resolveWait) => setTimeout(resolveWait, 100));
   }
   return lastStatus;
+}
+
+async function stopPreviewAttempt(child) {
+  if (!child?.pid || !(await processAlive(child.pid))) return;
+  try {
+    process.kill(child.pid, "SIGTERM");
+  } catch {
+    return;
+  }
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if (!(await processAlive(child.pid))) return;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  }
+  try {
+    process.kill(child.pid, "SIGKILL");
+  } catch {}
 }
 
 async function waitForHealthyUrl(url, timeoutMs) {

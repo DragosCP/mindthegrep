@@ -180,15 +180,14 @@ test("open creates and resumes draft runtime state", async () => {
   });
 });
 
-test("open chooses a DraftKit-owned preview port when 5173 is occupied by another server", async (t) => {
+test("open skips a Windows-like all-interface live server on 5173 and verifies the draft port", async (t) => {
   await withTempDraftkitRoot(async (cwd) => {
-    await writeDraftSpec(cwd);
     const liveServer = await startNonDraftkitServerOnDefaultPort(t);
     if (!liveServer) return;
     let cancelled = false;
 
     try {
-      const opened = await draftOpen("bulk-tagging", {
+      const opened = await draftOpen("todo", {
         cwd,
         sessionId: "session-1",
         now: "2026-07-03T00:00:00.000Z"
@@ -197,11 +196,16 @@ test("open chooses a DraftKit-owned preview port when 5173 is occupied by anothe
       assert.ok(opened.draftPreview, "draftOpen returns draftPreview details");
       assert.ok(opened.livePreview, "draftOpen returns livePreview details");
       assert.notEqual(opened.draftPreview.port, 5173);
+      assert.ok(opened.draftPreview.port >= 5174);
       assert.equal(opened.draftPreview.owner, "draftkit");
       assert.match(opened.draftPreview.url, new RegExp(`:${opened.draftPreview.port}/`));
       assert.equal(opened.livePreview.port, 5173);
       assert.equal(opened.livePreview.owner, "external");
+      assert.equal(opened.livePreview.healthy, true);
       const state = await readJson(join(cwd, ".draftspec/state/draftkit-active.json"));
+      const liveIdentityResponse = await fetch("http://localhost:5173/__draftkit/preview-identity", {
+        headers: { "x-draftkit-preview-token": state.process.previewIdentity.token }
+      });
       const wrongTokenResponse = await fetch(state.process.previewIdentity.url, {
         headers: { "x-draftkit-preview-token": "wrong-token" }
       });
@@ -209,14 +213,20 @@ test("open chooses a DraftKit-owned preview port when 5173 is occupied by anothe
         headers: { "x-draftkit-preview-token": state.process.previewIdentity.token }
       });
       const identity = await identityResponse.json();
+      const status = await draftStatus({ cwd });
+      const acceptedLog = await readFile(resolve(cwd, state.process.logPath), "utf8");
 
+      assert.equal(liveIdentityResponse.status, 404);
       assert.equal(wrongTokenResponse.status, 403);
       assert.equal(identityResponse.status, 200);
       assert.equal(identity.owner, "draftkit");
       assert.equal(identity.pid, state.process.pid);
       assert.equal(identity.sessionId, "session-1");
-      assert.equal(identity.feature, "bulk-tagging");
+      assert.equal(identity.feature, "todo");
       assert.equal(resolve(identity.cwd), resolve(state.process.previewIdentity.cwd));
+      assert.equal(status.draftPreview.healthy, true);
+      assert.equal(status.draftPreview.port, opened.draftPreview.port);
+      assert.doesNotMatch(acceptedLog, /EADDRINUSE/);
 
       const cancelledDraft = await draftCancel({ cwd });
       cancelled = true;
@@ -1116,6 +1126,12 @@ function findAvailableTestPort() {
 function startNonDraftkitServerOnDefaultPort(t) {
   return new Promise((resolveServer, rejectServer) => {
     const server = createHttpServer((request, response) => {
+      const url = new URL(request.url, `http://${request.headers.host}`);
+      if (url.pathname === "/__draftkit/preview-identity") {
+        response.writeHead(404, { "content-type": "text/plain" });
+        response.end("Not found");
+        return;
+      }
       response.writeHead(200, { "content-type": "text/plain" });
       response.end("live app, not DraftKit");
     });
@@ -1128,7 +1144,7 @@ function startNonDraftkitServerOnDefaultPort(t) {
       rejectServer(error);
     });
     server.once("listening", () => resolveServer(server));
-    server.listen(5173, "127.0.0.1");
+    server.listen(5173);
   });
 }
 

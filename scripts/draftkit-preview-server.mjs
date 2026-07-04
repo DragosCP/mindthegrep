@@ -6,6 +6,7 @@ import { extname, join, normalize } from "node:path";
 
 const root = process.cwd();
 const port = Number(process.env.PORT || 5173);
+const host = process.env.DRAFTKIT_PREVIEW_HOST || "127.0.0.1";
 const feature = process.env.DRAFTKIT_FEATURE;
 const previewToken = process.env.DRAFTKIT_PREVIEW_TOKEN || null;
 const sessionId = process.env.DRAFTKIT_SESSION_ID || null;
@@ -57,9 +58,13 @@ createServer(async (request, response) => {
     response.writeHead(error.code === "ENOENT" ? 404 : 500);
     response.end(error.code === "ENOENT" ? "Not found" : error.message);
   }
-}).listen(port, () => {
-  console.log(`Preview: http://localhost:${port}${previewPath(feature)}`);
+}).listen(port, host, () => {
+  console.log(`Preview: http://${formatHost(host)}:${port}${previewPath(feature)}`);
 });
+
+function formatHost(value) {
+  return value.includes(":") && !value.startsWith("[") ? `[${value}]` : value;
+}
 
 function previewPath(feature) {
   return existsSync(join(root, "examples", feature, "index.html"))
