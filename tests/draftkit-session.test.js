@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { createServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -159,6 +160,71 @@ test("open creates and resumes draft runtime state", async () => {
   });
 });
 
+test("open chooses a DraftKit-owned preview port when 5173 is occupied by another server", async (t) => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    const liveServer = await startNonDraftkitServerOnDefaultPort(t);
+    if (!liveServer) return;
+    let cancelled = false;
+
+    try {
+      const opened = await draftOpen("bulk-tagging", {
+        cwd,
+        sessionId: "session-1",
+        now: "2026-07-03T00:00:00.000Z"
+      });
+
+      assert.ok(opened.draftPreview, "draftOpen returns draftPreview details");
+      assert.ok(opened.livePreview, "draftOpen returns livePreview details");
+      assert.notEqual(opened.draftPreview.port, 5173);
+      assert.equal(opened.draftPreview.owner, "draftkit");
+      assert.match(opened.draftPreview.url, new RegExp(`:${opened.draftPreview.port}/`));
+      assert.equal(opened.livePreview.port, 5173);
+      assert.equal(opened.livePreview.owner, "external");
+      const state = await readJson(join(cwd, ".draftspec/state/draftkit-active.json"));
+      const wrongTokenResponse = await fetch(state.process.previewIdentity.url, {
+        headers: { "x-draftkit-preview-token": "wrong-token" }
+      });
+      const identityResponse = await fetch(state.process.previewIdentity.url, {
+        headers: { "x-draftkit-preview-token": state.process.previewIdentity.token }
+      });
+      const identity = await identityResponse.json();
+
+      assert.equal(wrongTokenResponse.status, 403);
+      assert.equal(identityResponse.status, 200);
+      assert.equal(identity.owner, "draftkit");
+      assert.equal(identity.pid, state.process.pid);
+      assert.equal(identity.sessionId, "session-1");
+      assert.equal(identity.feature, "bulk-tagging");
+
+      const cancelledDraft = await draftCancel({ cwd });
+      cancelled = true;
+
+      assert.equal(cancelledDraft.stoppedProcess, true);
+      assert.match(cancelledDraft.stopReason, /stopped DraftKit-owned preview process/);
+    } finally {
+      await closeServer(liveServer);
+      if (!cancelled) await draftCancel({ cwd });
+    }
+  });
+});
+
+test("open rejects missing feature when no isolated draft can be resumed", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await assert.rejects(
+      () => draftOpen(undefined, { cwd, startPreview: false }),
+      /feature[- ]slug[- ]required|feature slug is required|feature is required/i
+    );
+  });
+});
+
+test("npm open script stays generic and demo open script passes bulk-tagging explicitly", async () => {
+  const packageJson = await readJson("package.json");
+
+  assert.equal(packageJson.scripts["draftkit:open"], "node scripts/draftkit-session.mjs open");
+  assert.match(packageJson.scripts["draftkit:open:bulk-tagging"], /\bopen\s+bulk-tagging\b/);
+});
+
 test("open creates a valid scaffold for new feature slugs", async () => {
   await withTempDraftkitRoot(async (cwd) => {
     const opened = await draftOpen("board-columns", {
@@ -179,6 +245,60 @@ test("open creates a valid scaffold for new feature slugs", async () => {
     assert.equal(spec.ui.some((item) => item.id === "draft-host"), true);
     assert.equal(spec.actions.some((action) => action.id === "open-draft-host"), true);
     assert.equal(spec.backendContracts.some((contract) => contract.id === "draftSave"), true);
+  });
+});
+
+test("status reports stale when the live baseline advances after a draft opens", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    const opened = await draftOpen("bulk-tagging", {
+      cwd,
+      sessionId: "session-1",
+      startPreview: false,
+      now: "2026-07-03T00:00:00.000Z"
+    });
+
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'live-change';\n");
+    await git(cwd, ["add", "src/app.js"]);
+    await git(cwd, ["commit", "-m", "advance live"]);
+
+    const status = await draftStatus({ cwd });
+
+    assert.ok(opened.liveBaseline, "draftOpen records the liveBaseline used for the draft");
+    assert.ok(status.liveBaseline, "draftStatus reports the recorded liveBaseline");
+    assert.equal(status.liveBaseline.commit, opened.liveBaseline.commit);
+    assert.equal(status.stale, true);
+    assert.match(status.staleReasons.join("\n"), /live baseline|live checkpoint|baseline/i);
+    assert.equal(status.next.includes("choose refresh/rebase for bulk-tagging"), true);
+    assert.equal(status.next.includes("choose continue stale for bulk-tagging"), true);
+    assert.equal(status.next.some((action) => action.startsWith("draft-refresh")), false);
+    assert.equal(status.next.some((action) => action.startsWith("draft-rebase")), false);
+    assert.equal(status.next.some((action) => action.startsWith("draft-continue-stale")), false);
+    assert.equal(status.next.includes("draft-cancel"), true);
+  });
+});
+
+test("status reports stale when the isolated workspace marker is missing", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    const opened = await draftOpen("bulk-tagging", {
+      cwd,
+      sessionId: "session-1",
+      startPreview: false,
+      now: "2026-07-03T00:00:00.000Z"
+    });
+    const workspacePath = resolveFromCwd(cwd, opened.draftWorkspace.path);
+    await rm(join(workspacePath, ".draftspec/state/draftkit-workspace.json"), { force: true });
+
+    const status = await draftStatus({ cwd });
+
+    assert.equal(status.state, "stale");
+    assert.equal(status.stale, true);
+    assert.match(status.staleReasons.join("\n"), /workspace marker is missing/i);
   });
 });
 
@@ -283,9 +403,222 @@ test("cancel reports approved snapshots created after the draft was opened", asy
   });
 });
 
+test("cancel discards draft-owned edits in the isolated workspace", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'live';\n");
+    await initializeGitBaseline(cwd);
+    const opened = await draftOpen("bulk-tagging", {
+      cwd,
+      sessionId: "session-1",
+      startPreview: false,
+      now: "2026-07-03T00:00:00.000Z"
+    });
+    assert.ok(opened.draftWorkspace, "draftOpen returns the isolated draftWorkspace");
+    const workspacePath = resolveFromCwd(cwd, opened.draftWorkspace.path);
+
+    await writeFileWithParents(join(workspacePath, "src/app.js"), "export const value = 'draft';\n");
+
+    const result = await draftCancel({ cwd, now: "2026-07-03T00:02:00.000Z" });
+    const liveFile = await readFile(join(cwd, "src/app.js"), "utf8");
+
+    assert.ok(result.cancellation, "draftCancel returns cancellation details");
+    assert.ok(result.isolation, "draftCancel returns isolation details");
+    assert.equal(result.cancellation.blocked, false);
+    assert.equal(result.isolation.discardedDraftWorkspace, true);
+    assert.equal(existsSync(workspacePath), false);
+    assert.equal(liveFile, "export const value = 'live';\n");
+  });
+});
+
+test("cancel preserves unrelated live work made before the isolated draft opens", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    await writeFileWithParents(join(cwd, "notes.txt"), "pre-existing live work\n");
+    const opened = await draftOpen("bulk-tagging", {
+      cwd,
+      sessionId: "session-1",
+      startPreview: false,
+      now: "2026-07-03T00:00:00.000Z"
+    });
+    assert.ok(opened.draftWorkspace, "draftOpen returns the isolated draftWorkspace");
+
+    await writeFileWithParents(
+      join(resolveFromCwd(cwd, opened.draftWorkspace.path), "src/app.js"),
+      "export const value = 'draft';\n"
+    );
+
+    const result = await draftCancel({ cwd, now: "2026-07-03T00:02:00.000Z" });
+    const preExistingLiveWork = await readFile(join(cwd, "notes.txt"), "utf8");
+
+    assert.ok(result.cancellation, "draftCancel returns cancellation details");
+    assert.equal(result.cancellation.blocked, false);
+    assert.equal(preExistingLiveWork, "pre-existing live work\n");
+  });
+});
+
+test("cancel blocks when draft edits cannot be separated from live work", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'mixed-live-and-draft';\n");
+    const state = {
+      ...activeState({ cwd }),
+      liveBaseline: await currentGitBaseline(cwd),
+      draftWorkspace: null,
+      isolation: {
+        strategy: "none",
+        separated: false,
+        reason: "legacy session modified the live workspace directly"
+      }
+    };
+    await writeJson(join(cwd, ".draftspec/state/sessions/session-1/draftkit-state.json"), state);
+    await writeJson(join(cwd, ".draftspec/state/draftkit-active.json"), state);
+
+    const result = await draftCancel({ cwd });
+    const liveFile = await readFile(join(cwd, "src/app.js"), "utf8");
+
+    assert.ok(result.cancellation, "draftCancel returns cancellation details");
+    assert.equal(result.cancellation.blocked, true);
+    assert.match(result.cancellation.reason, /cannot separate|isolation|live work/i);
+    assert.equal(existsSync(join(cwd, ".draftspec/state/draftkit-active.json")), true);
+    assert.equal(liveFile, "export const value = 'mixed-live-and-draft';\n");
+  });
+});
+
+test("cancel blocks when the isolated workspace directory is missing", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    const opened = await draftOpen("bulk-tagging", {
+      cwd,
+      sessionId: "session-1",
+      startPreview: false,
+      now: "2026-07-03T00:00:00.000Z"
+    });
+    await rm(resolveFromCwd(cwd, opened.draftWorkspace.path), { recursive: true, force: true });
+
+    const result = await draftCancel({ cwd });
+
+    assert.equal(result.cancellation.blocked, true);
+    assert.match(result.cancellation.reason, /draft workspace is missing/i);
+    assert.equal(existsSync(join(cwd, ".draftspec/state/draftkit-active.json")), true);
+  });
+});
+
+test("cancel blocks tampered draft workspace paths outside DraftKit storage", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    const outsidePath = await mkdtemp(join(tmpdir(), "draftkit-outside-"));
+    const traversalPath = "../outside-workspace";
+
+    try {
+      for (const draftWorkspacePath of [outsidePath, traversalPath]) {
+        const state = {
+          ...activeState({ cwd }),
+          draftWorkspace: {
+            path: draftWorkspacePath,
+            owner: "draftkit"
+          },
+          isolation: {
+            strategy: "workspace-copy",
+            separated: true
+          }
+        };
+        await writeJson(join(cwd, ".draftspec/state/sessions/session-1/draftkit-state.json"), state);
+        await writeJson(join(cwd, ".draftspec/state/draftkit-active.json"), state);
+
+        const result = await draftCancel({ cwd });
+
+        assert.equal(result.cancellation.blocked, true);
+        assert.match(result.cancellation.reason, /relative|outside DraftKit workspace storage/i);
+        assert.equal(existsSync(join(cwd, ".draftspec/state/draftkit-active.json")), true);
+        assert.equal(existsSync(outsidePath), true);
+      }
+    } finally {
+      await rm(outsidePath, { recursive: true, force: true });
+    }
+  });
+});
+
+test("cancel blocks an existing workspace without a DraftKit ownership marker", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    const workspacePath = join(cwd, ".draftspec/state/workspaces/session-1");
+    await mkdir(workspacePath, { recursive: true });
+    await writeFileWithParents(join(workspacePath, "owned-by-someone-else.txt"), "do not delete\n");
+    const state = {
+      ...activeState({ cwd }),
+      draftWorkspace: {
+        path: ".draftspec/state/workspaces/session-1",
+        owner: "draftkit"
+      },
+      isolation: {
+        strategy: "workspace-copy",
+        separated: true
+      }
+    };
+    await writeJson(join(cwd, ".draftspec/state/sessions/session-1/draftkit-state.json"), state);
+    await writeJson(join(cwd, ".draftspec/state/draftkit-active.json"), state);
+
+    const result = await draftCancel({ cwd });
+
+    assert.equal(result.cancellation.blocked, true);
+    assert.match(result.cancellation.reason, /marker/i);
+    assert.equal(existsSync(workspacePath), true);
+    assert.equal(existsSync(join(workspacePath, "owned-by-someone-else.txt")), true);
+  });
+});
+
+test("cancel blocks a workspace marker without matching cwd and feature", async () => {
+  await withTempDraftkitRoot(async (cwd) => {
+    await writeDraftSpec(cwd);
+    await writeFileWithParents(join(cwd, "src/app.js"), "export const value = 'baseline';\n");
+    await initializeGitBaseline(cwd);
+    const workspacePath = join(cwd, ".draftspec/state/workspaces/session-1");
+    await writeJson(join(workspacePath, ".draftspec/state/draftkit-workspace.json"), {
+      owner: "draftkit",
+      sessionId: "session-1"
+    });
+    const state = {
+      ...activeState({ cwd }),
+      draftWorkspace: {
+        path: ".draftspec/state/workspaces/session-1",
+        owner: "draftkit"
+      },
+      isolation: {
+        strategy: "workspace-copy",
+        separated: true
+      }
+    };
+    await writeJson(join(cwd, ".draftspec/state/sessions/session-1/draftkit-state.json"), state);
+    await writeJson(join(cwd, ".draftspec/state/draftkit-active.json"), state);
+
+    const result = await draftCancel({ cwd });
+
+    assert.equal(result.cancellation.blocked, true);
+    assert.match(result.cancellation.reason, /cwd|feature/i);
+    assert.equal(existsSync(workspacePath), true);
+  });
+});
+
 test("cancel does not kill a process that DraftKit did not start", async () => {
   await withTempDraftkitRoot(async (cwd) => {
     await writeDraftSpec(cwd);
+    await writeJson(join(cwd, ".draftspec/state/workspaces/session-1/.draftspec/state/draftkit-workspace.json"), {
+      owner: "draftkit",
+      sessionId: "session-1",
+      feature: "bulk-tagging",
+      cwd
+    });
     const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
       stdio: "ignore"
     });
@@ -503,11 +836,22 @@ function activeState({ cwd }) {
     phase: "open",
     feature: "bulk-tagging",
     preview: { url: null, port: null, owner: "none" },
+    draftPreview: { url: null, port: null, owner: "none" },
+    livePreview: { url: null, port: null, owner: "none" },
     process: null,
     draftSpec: ".draftspec/features/bulk-tagging.json",
     approvedSpec: null,
     snapshotId: null,
     approvalStatus: "unapproved",
+    liveBaseline: { type: "git", commit: "baseline-commit", dirty: false },
+    draftWorkspace: {
+      path: ".draftspec/state/workspaces/session-1",
+      owner: "draftkit"
+    },
+    isolation: {
+      strategy: "workspace-copy",
+      separated: true
+    },
     checks: [],
     lastAction: "draft-open",
     lastUpdatedAt: "2026-07-03T00:00:00.000Z",
@@ -552,7 +896,7 @@ async function stopChild(child) {
 
 function findAvailableTestPort() {
   return new Promise((resolvePort, rejectPort) => {
-    const server = createServer();
+    const server = createNetServer();
     server.once("error", rejectPort);
     server.once("listening", () => {
       const { port } = server.address();
@@ -560,6 +904,75 @@ function findAvailableTestPort() {
     });
     server.listen(0, "127.0.0.1");
   });
+}
+
+function startNonDraftkitServerOnDefaultPort(t) {
+  return new Promise((resolveServer, rejectServer) => {
+    const server = createHttpServer((request, response) => {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("live app, not DraftKit");
+    });
+    server.once("error", (error) => {
+      if (error.code === "EADDRINUSE") {
+        t.skip("port 5173 is already occupied, so this test cannot own the non-DraftKit fixture server");
+        resolveServer(null);
+        return;
+      }
+      rejectServer(error);
+    });
+    server.once("listening", () => resolveServer(server));
+    server.listen(5173, "127.0.0.1");
+  });
+}
+
+function closeServer(server) {
+  return new Promise((resolveClose, rejectClose) => {
+    server.close((error) => {
+      if (error) rejectClose(error);
+      else resolveClose();
+    });
+  });
+}
+
+async function initializeGitBaseline(cwd) {
+  await git(cwd, ["init"]);
+  await git(cwd, ["config", "user.email", "draftkit-test@example.com"]);
+  await git(cwd, ["config", "user.name", "DraftKit Test"]);
+  await git(cwd, ["add", "."]);
+  await git(cwd, ["commit", "-m", "baseline"]);
+}
+
+async function currentGitBaseline(cwd) {
+  const commit = await git(cwd, ["rev-parse", "HEAD"]);
+  const status = await git(cwd, ["status", "--porcelain"]);
+  return { type: "git", commit: commit.trim(), dirty: status.trim().length > 0 };
+}
+
+function git(cwd, args) {
+  return new Promise((resolveGit, rejectGit) => {
+    const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.once("error", rejectGit);
+    child.once("exit", (code) => {
+      if (code === 0) {
+        resolveGit(stdout);
+        return;
+      }
+      rejectGit(new Error(`git ${args.join(" ")} failed with ${code}: ${stderr || stdout}`));
+    });
+  });
+}
+
+function resolveFromCwd(cwd, maybeRelativePath) {
+  assert.equal(typeof maybeRelativePath, "string");
+  return resolve(cwd, maybeRelativePath);
 }
 
 async function waitForTestUrl(url) {

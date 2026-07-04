@@ -7,6 +7,8 @@ import { extname, join, normalize } from "node:path";
 const root = process.cwd();
 const port = Number(process.env.PORT || 5173);
 const feature = process.env.DRAFTKIT_FEATURE || "bulk-tagging";
+const previewToken = process.env.DRAFTKIT_PREVIEW_TOKEN || null;
+const sessionId = process.env.DRAFTKIT_SESSION_ID || null;
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -19,6 +21,17 @@ const mime = {
 createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host}`);
+    if (url.pathname === "/__draftkit/preview-identity") {
+      if (!previewToken || request.headers["x-draftkit-preview-token"] !== previewToken) {
+        response.writeHead(403);
+        response.end("Forbidden");
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ owner: "draftkit", sessionId, feature, cwd: root, pid: process.pid }));
+      return;
+    }
+
     const pathname = url.pathname.endsWith("/") ? `${url.pathname}index.html` : url.pathname;
     const draftHostMatch = pathname.match(/^\/draftkit\/([a-z0-9][a-z0-9-]*)(?:\/index\.html)?$/);
     if (draftHostMatch) {

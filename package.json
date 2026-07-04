@@ -13,6 +13,7 @@
     "dev": "node scripts/dev-server.mjs",
     "draftkit:status": "node scripts/draftkit-session.mjs status",
     "draftkit:open": "node scripts/draftkit-session.mjs open",
+    "draftkit:open:bulk-tagging": "node scripts/draftkit-session.mjs open bulk-tagging",
     "draftkit:cancel": "node scripts/draftkit-session.mjs cancel",
     "draftkit:plan-to-go-live": "node scripts/draftkit-session.mjs plan-to-go-live",
     "draftkit:implement-to-live": "node scripts/draftkit-session.mjs implement-to-live"

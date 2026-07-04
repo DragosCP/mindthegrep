@@ -5,7 +5,7 @@ description: Implement real backend integration from an approved DraftKit .draft
 
 # Draft Integrate
 
-Map approved draft behavior to the real backend.
+Map approved frontend-only draft behavior to the real backend.
 
 For button-driven sessions, use `node ./scripts/draftkit-session.mjs implement-to-live <feature>` so the approved snapshot and go-live plan gates run first.
 

@@ -22,7 +22,7 @@ Use the direct Node command for Codex Desktop, WSL, and Linux sessions. Do not r
 - Show feature, live baseline, draft workspace/isolation status, draft preview URL, live preview URL when known, draft spec, approved spec, approval state, snapshot ID, checks, stale reasons, and next valid actions.
 - Report whether live has moved since the draft baseline.
 - Do not use runtime state as authorization for backend work.
-- If state is stale, report it clearly and route toward an explicit refresh/rebase, continue-stale, or `draft-cancel` recovery action.
+- If state is stale, report it clearly and route toward an explicit refresh/rebase, continue stale, or cancel action.
 - If the runtime cannot report baseline/isolation yet, call out that limitation.
 
 ## Output
@@ -30,4 +30,4 @@ Use the direct Node command for Codex Desktop, WSL, and Linux sessions. Do not r
 - Current DraftKit mode and state.
 - Any stale-state evidence.
 - Baseline and isolation evidence when available.
-- Next valid DraftKit actions.
+- Next valid DraftKit actions, including refresh/rebase, continue stale, and cancel when stale.

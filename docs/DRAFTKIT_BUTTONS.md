@@ -25,14 +25,17 @@ A draft should not be mixed into the same mutable working tree as live work. Oth
 Required model:
 
 - `draft-open <feature>` records the live baseline before draft edits begin.
-- Draft edits happen in an isolated worktree, sandbox, or overlay, not directly on top of the live working tree.
+- `draft-open <feature>` creates or resumes isolated draft workspace/state, preferably through a git worktree or sandbox when the host project supports it.
+- Draft edits happen in that isolated worktree, sandbox, or overlay, not directly on top of the live working tree.
 - The live app can keep running from the live baseline.
 - The draft app runs from the isolated draft state on a DraftKit-owned preview port.
 - `draft-cancel` discards the isolated draft and restores the user to the live baseline.
 - `draft-approve` freezes the accepted draft behavior.
 - `draft-implement-to-live` applies only approved behavior to the current live app.
 
-If live changes while a draft exists, DraftKit should not silently replay the draft. It should mark the draft stale and require an explicit user action such as refresh/rebase, continue from the old baseline, or cancel.
+If live changes while a draft exists, DraftKit should not silently replay the draft. It should mark the draft stale and require an explicit action: refresh/rebase, continue stale from the old baseline, or cancel.
+
+DraftKit tries product behavior in frontend-only draft mode. Approved behavior is later mapped onto the app's existing backend architecture; DraftKit is not a path for switching backend or database architecture during a draft.
 
 ## Target Install Model
 
@@ -54,7 +57,7 @@ Codex `$draft-*` buttons still require project-local skill files, so the npm pac
 | Button | Reliable Command | Npm Alias | Mutates Runtime State | Requires Approved Snapshot |
 | --- | --- | --- | --- | --- |
 | `draft-status` | `node ./scripts/draftkit-session.mjs status` | `npm run draftkit:status` | No | No |
-| `draft-open` | `node ./scripts/draftkit-session.mjs open <feature>` | `npm run draftkit:open -- <feature>` | Yes | No |
+| `draft-open` | `node ./scripts/draftkit-session.mjs open <feature>` | `npm run draftkit:open -- <feature>`; demo: `npm run draftkit:open:bulk-tagging` | Yes | No |
 | `draft-cancel` | `node ./scripts/draftkit-session.mjs cancel` | `npm run draftkit:cancel` | Yes | No |
 | `draft-plan-to-go-live` | `node ./scripts/draftkit-session.mjs plan-to-go-live <feature>` | `npm run draftkit:plan-to-go-live -- <feature>` | Logs only | Yes |
 | `draft-implement-to-live` | `node ./scripts/draftkit-session.mjs implement-to-live <feature>` | `npm run draftkit:implement-to-live -- <feature>` | Logs only | Yes |
@@ -94,11 +97,14 @@ The fixture backend sandbox is used in this repository because there is no produ
 - mode: `live`, `draft`, or `unknown`
 - state: `none`, `active`, `inactive`, or `stale`
 - feature
-- preview URL and health when known
+- live baseline
+- draft workspace/isolation status
+- draft preview URL and health when known
+- live preview URL when known
 - draft spec path and validation state
 - approved spec path, approval state, and snapshot ID
 - stale reasons
-- next valid actions
+- next valid actions, including refresh/rebase, continue stale, and cancel when a draft is stale
 
 Status treats missing session files, cwd drift, unhealthy previews, and dead recorded preview processes as stale state. It does not delete or repair state by itself.
 
@@ -109,21 +115,24 @@ Status treats missing session files, cwd drift, unhealthy previews, and dead rec
 It:
 
 - records the live baseline for the draft session
+- creates or resumes isolated draft workspace/state, preferably through a git worktree or sandbox when available
 - locates or creates `.draftspec/features/<feature>.json`
 - starts or reuses a DraftKit-owned preview for the isolated draft state
 - opens `examples/<feature>/` when that example exists
 - otherwise opens the generic DraftKit host at `/draftkit/<feature>/`, rendering the current draft spec as a scaffold preview
 - writes both the session state and active mirror
 - appends local session history
-- reports the preview, spec path, approval state, advisory guardrail level, and next actions
+- reports live baseline, draft workspace/isolation status, draft preview URL, live preview URL when known, spec path, approval state, advisory guardrail level, stale state, and next actions
 
-While draft mode is active, agents should keep work inside the existing app shell, use local draft data/state, and avoid real backend, database, schema, queue, or production API edits unless an approved go-live workflow is running.
+While draft mode is active, agents should keep work inside the existing app shell, use local draft data adapter/state, and avoid real backend, database, schema, queue, or production API edits unless an approved go-live workflow is running.
 
-Consumer installs should not default to sample features such as `bulk-tagging`. If no feature is provided and no isolated draft session can be resumed, `draft-open` should fail with a clear feature-slug-required message.
+Consumer installs should not default to sample features such as `bulk-tagging`. If no feature is provided and no isolated active draft session can be resumed, `draft-open` should fail with a clear feature-slug-required message.
+
+The generic npm alias remains feature-aware: `npm run draftkit:open -- <feature>`. This repository also keeps `npm run draftkit:open:bulk-tagging` as an explicit demo shortcut so sample flows pass the feature slug intentionally.
 
 ## `draft-cancel`
 
-`draft-cancel` currently exits draft mode without deleting draft work. That is the current MVP behavior, not the final product contract.
+`draft-cancel` exits draft mode by discarding the isolated draft workspace/state and returning the live working tree to the recorded baseline context.
 
 It:
 
@@ -131,13 +140,13 @@ It:
 - removes `.draftspec/state/draftkit-active.json`
 - appends a session-history event
 - preserves draft and approved specs
+- deletes the isolated DraftKit-owned draft workspace
 - stops only a preview process DraftKit started and can still verify by identity
+- blocks instead of clearing state when a legacy or damaged session cannot prove draft edits are separated from live work
 
 Cancel refuses to kill unknown processes or processes that only match by PID.
 
-Required product behavior: cancelling a draft should restore the pre-draft live baseline. DraftKit needs a baseline/isolation mechanism so `draft-cancel` can discard draft-session edits without reverting unrelated user work. If it cannot safely separate draft edits from pre-existing changes, it should block with a clear recovery path instead of reporting that the draft was cancelled while leaving the app changed.
-
-In the target model, `draft-cancel` deletes or discards the isolated draft workspace/overlay and leaves the live working tree unchanged.
+When the runtime uses a git worktree, cancel removes that worktree. When it uses the copy sandbox fallback, cancel removes the sandbox directory. In both cases unrelated live work that existed before `draft-open` remains in the live working tree.
 
 ## `draft-plan-to-go-live`
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { randomBytes } from "node:crypto";
 import { existsSync, openSync } from "node:fs";
 import {
   access,
@@ -12,8 +13,9 @@ import {
   rm,
   writeFile
 } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import {
   addBackendContract,
   addFixture,
@@ -31,8 +33,10 @@ const DEFAULT_PORT = 5173;
 const STATE_SCHEMA_VERSION = 1;
 const PREVIEW_TIMEOUT_MS = 5000;
 const FEATURE_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+const DRAFT_WORKSPACE_MARKER = join(".draftspec", "state", "draftkit-workspace.json");
 
 const __filename = fileURLToPath(import.meta.url);
+const execFileAsync = promisify(execFile);
 
 export function draftkitPaths(cwd = process.cwd()) {
   const draftspec = join(cwd, ".draftspec");
@@ -43,6 +47,7 @@ export function draftkitPaths(cwd = process.cwd()) {
     goLiveDir: join(draftspec, "go-live"),
     stateDir: join(draftspec, "state"),
     sessionsDir: join(draftspec, "state", "sessions"),
+    workspacesDir: join(draftspec, "state", "workspaces"),
     logsDir: join(draftspec, "logs"),
     activeState: join(draftspec, "state", "draftkit-active.json"),
     historyLog: join(draftspec, "logs", "session-history.jsonl"),
@@ -58,12 +63,18 @@ export async function draftStatus(options = {}) {
   const active = await readJsonIfExists(paths.activeState);
 
   if (!active) {
+    const livePreview = await inspectLivePreview(cwd, null);
     return {
       command: "draft-status",
       mode: "live",
       state: "none",
       feature: null,
       preview: { url: null, port: null, healthy: "unknown" },
+      draftPreview: { url: null, port: null, healthy: "unknown" },
+      livePreview,
+      liveBaseline: null,
+      draftWorkspace: null,
+      isolation: { status: "none", strategy: "none", limitation: null },
       draftSpec: null,
       approvedSpec: null,
       approval: "none",
@@ -71,7 +82,7 @@ export async function draftStatus(options = {}) {
       stale: false,
       staleReasons: [],
       checks: [],
-      next: [`draft-open <feature>`, `draft-open ${DEFAULT_FEATURE}`]
+      next: ["draft-open <feature>"]
     };
   }
 
@@ -86,12 +97,20 @@ export async function draftStatus(options = {}) {
   if (!validation.valid) staleReasons.push(...validation.errors);
   if (state.cwd && resolve(state.cwd) !== cwd) staleReasons.push("state cwd does not match current cwd");
 
-  const specInfo = await inspectSpecs(cwd, state.feature);
+  const draftWorkspacePath = draftWorkspaceAbsolutePath(state, cwd);
+  const specRoot = draftWorkspacePath && existsSync(draftWorkspacePath) ? draftWorkspacePath : cwd;
+  const workspaceIntegrity = await validateDraftWorkspaceIntegrity(cwd, state);
+  if (!workspaceIntegrity.valid) staleReasons.push(workspaceIntegrity.reason);
+  const liveMovement = await inspectLiveMovement(cwd, state.liveBaseline);
+  staleReasons.push(...liveMovement.staleReasons);
+
+  const specInfo = await inspectDraftSessionSpecs(cwd, specRoot, state.feature);
   const preview = await inspectPreview(state, cwd);
   if (preview.staleReason) staleReasons.push(preview.staleReason);
 
   const stale = staleReasons.length > 0;
   const approval = specInfo.approvalStatus;
+  const livePreview = await inspectLivePreview(cwd, state);
 
   return {
     command: "draft-status",
@@ -102,6 +121,20 @@ export async function draftStatus(options = {}) {
       url: state.preview?.url || null,
       port: state.preview?.port || null,
       healthy: preview.healthy
+    },
+    draftPreview: {
+      url: state.preview?.url || null,
+      port: state.preview?.port || null,
+      healthy: preview.healthy
+    },
+    livePreview,
+    liveBaseline: state.liveBaseline || null,
+    currentLiveBaseline: liveMovement.currentBaseline,
+    draftWorkspace: state.draftWorkspace || null,
+    isolation: state.isolation || {
+      status: "legacy-unisolated",
+      strategy: "none",
+      limitation: "Runtime state does not include an isolated draft workspace."
     },
     draftSpec: specInfo.draftSpec,
     draftSpecValid: specInfo.draftSpecValid,
@@ -117,13 +150,11 @@ export async function draftStatus(options = {}) {
 
 export async function draftOpen(feature, options = {}) {
   const cwd = resolve(options.cwd || process.cwd());
-  const safeFeature = normalizeFeature(feature);
   const paths = draftkitPaths(cwd);
   await ensureRuntimeDirs(paths);
-  const draftSpecPath = await ensureDraftSpec(cwd, safeFeature);
-  const approvedInfo = await inspectSpecs(cwd, safeFeature);
   const existingStatus = await draftStatus({ cwd });
   const existingActive = await readJsonIfExists(paths.activeState);
+  const safeFeature = await resolveOpenFeature(feature, cwd, existingActive);
   const now = isoNow(options.now);
   const sessionId =
     options.sessionId ||
@@ -133,18 +164,57 @@ export async function draftOpen(feature, options = {}) {
     process.env.OMX_SESSION_ID ||
     `draftkit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+  if (existingActive?.feature === safeFeature && existingStatus.state === "stale") {
+    throw new Error(
+      `Draft ${safeFeature} is stale; choose refresh/rebase, continue stale, or draft-cancel`
+    );
+  }
+
   let action = "created";
   let preview = { url: null, port: null, owner: "none" };
+  let livePreview = await inspectLivePreview(cwd, existingActive);
   let processInfo = null;
+  let liveBaseline = null;
+  let draftWorkspace = null;
+  let isolation = null;
+  let draftSpecPath = null;
+  let approvedInfo = null;
 
   if (existingActive?.feature === safeFeature && existingStatus.state === "active") {
     action = "resumed";
     preview = existingActive.preview || preview;
+    livePreview = existingActive.livePreview || livePreview;
     processInfo = existingActive.process || null;
+    liveBaseline = existingActive.liveBaseline || null;
+    draftWorkspace = existingActive.draftWorkspace || null;
+    isolation = existingActive.isolation || null;
+    const workspaceRoot = draftWorkspaceAbsolutePath(existingActive, cwd) || cwd;
+    draftSpecPath = join(workspaceRoot, ".draftspec", "features", `${safeFeature}.json`);
+    approvedInfo = await inspectSpecs(workspaceRoot, safeFeature);
   } else if (options.startPreview !== false) {
-    const started = await ensurePreview(cwd, safeFeature, sessionId, options);
+    const liveDraftSpecPath = await ensureDraftSpec(cwd, safeFeature);
+    approvedInfo = await inspectSpecs(cwd, safeFeature);
+    liveBaseline = await captureLiveBaseline(cwd);
+    const workspace = await ensureDraftWorkspace(cwd, safeFeature, sessionId, liveBaseline, options);
+    draftWorkspace = workspace.draftWorkspace;
+    isolation = workspace.isolation;
+    const workspaceRoot = resolveWorkspacePath(cwd, draftWorkspace.path);
+    await syncDraftSpecsToWorkspace(cwd, workspaceRoot);
+    draftSpecPath = join(workspaceRoot, toRelative(cwd, liveDraftSpecPath));
+    const started = await ensurePreview(cwd, workspaceRoot, safeFeature, sessionId, options);
     preview = started.preview;
+    livePreview = started.livePreview;
     processInfo = started.process;
+  } else {
+    const liveDraftSpecPath = await ensureDraftSpec(cwd, safeFeature);
+    approvedInfo = await inspectSpecs(cwd, safeFeature);
+    liveBaseline = await captureLiveBaseline(cwd);
+    const workspace = await ensureDraftWorkspace(cwd, safeFeature, sessionId, liveBaseline, options);
+    draftWorkspace = workspace.draftWorkspace;
+    isolation = workspace.isolation;
+    const workspaceRoot = resolveWorkspacePath(cwd, draftWorkspace.path);
+    await syncDraftSpecsToWorkspace(cwd, workspaceRoot);
+    draftSpecPath = join(workspaceRoot, toRelative(cwd, liveDraftSpecPath));
   }
 
   const state = {
@@ -156,8 +226,13 @@ export async function draftOpen(feature, options = {}) {
     phase: "open",
     feature: safeFeature,
     preview,
+    draftPreview: preview,
+    livePreview,
     process: processInfo,
-    draftSpec: toRelative(cwd, draftSpecPath),
+    liveBaseline,
+    draftWorkspace,
+    isolation,
+    draftSpec: toRelative(draftWorkspace ? resolveWorkspacePath(cwd, draftWorkspace.path) : cwd, draftSpecPath),
     approvedSpec: approvedInfo.approvedSpec,
     snapshotId: approvedInfo.snapshotId,
     approvalStatus: approvedInfo.approvalStatus,
@@ -179,7 +254,10 @@ export async function draftOpen(feature, options = {}) {
     feature: safeFeature,
     sessionId,
     at: now,
-    preview
+    preview,
+    liveBaseline,
+    draftWorkspace,
+    isolation
   });
 
   return {
@@ -189,7 +267,12 @@ export async function draftOpen(feature, options = {}) {
     state: "active",
     feature: safeFeature,
     preview,
-    draftSpec: toRelative(cwd, draftSpecPath),
+    draftPreview: preview,
+    livePreview,
+    liveBaseline,
+    draftWorkspace,
+    isolation,
+    draftSpec: toRelative(draftWorkspace ? resolveWorkspacePath(cwd, draftWorkspace.path) : cwd, draftSpecPath),
     approvedSpec: approvedInfo.approvedSpec,
     approval: approvedInfo.approvalStatus,
     snapshotId: approvedInfo.snapshotId,
@@ -217,26 +300,37 @@ export async function draftCancel(options = {}) {
       state: "none",
       feature: null,
       stoppedProcess: false,
+      cancellation: { blocked: false, reason: "no active draft session" },
+      isolation: { status: "none", strategy: "none", discardedDraftWorkspace: false },
       preserved: [],
-      next: ["agent behaves normally", `draft-open ${DEFAULT_FEATURE}`]
+      next: ["agent behaves normally", "draft-open <feature>"]
     };
   }
 
   const sessionPath = resolve(cwd, active.sessionStatePath || sessionStatePath(cwd, active.sessionId));
   const state = (await readJsonIfExists(sessionPath)) || active;
+  const workspaceValidation = await validateDraftWorkspaceIntegrity(cwd, state);
+  if (!workspaceValidation.valid) return await blockedCancelResult(paths, state, now, workspaceValidation.reason);
+
   const stopped = await stopOwnedPreviewProcess(state.process, cwd, options);
   const specInfo = await inspectSpecs(cwd, state.feature);
   const preserved = [
     specInfo.draftSpec || state.draftSpec,
     specInfo.approvedSpec || state.approvedSpec
   ].filter(Boolean);
+  const workspaceRemoval = await removeDraftWorkspace(cwd, state, options, workspaceValidation.workspacePath);
   const cancelled = {
     ...state,
     mode: "live",
     phase: "cancelled",
+    isolation: {
+      ...state.isolation,
+      discardedDraftWorkspace: workspaceRemoval.discarded,
+      discardReason: workspaceRemoval.reason
+    },
     lastAction: "draft-cancel",
     lastUpdatedAt: now,
-    next: [`draft-open ${state.feature || DEFAULT_FEATURE}`]
+    next: [`draft-open ${state.feature || "<feature>"}`]
   };
 
   await writeJson(sessionPath, cancelled);
@@ -247,7 +341,9 @@ export async function draftCancel(options = {}) {
     sessionId: state.sessionId || null,
     at: now,
     stoppedProcess: stopped.stopped,
-    stopReason: stopped.reason
+    stopReason: stopped.reason,
+    discardedDraftWorkspace: workspaceRemoval.discarded,
+    discardReason: workspaceRemoval.reason
   });
 
   return {
@@ -257,8 +353,18 @@ export async function draftCancel(options = {}) {
     feature: state.feature || null,
     stoppedProcess: stopped.stopped,
     stopReason: stopped.reason,
+    cancellation: {
+      blocked: false,
+      reason: "discarded isolated draft workspace",
+      restoredBaseline: state.liveBaseline || null
+    },
+    isolation: {
+      ...state.isolation,
+      discardedDraftWorkspace: workspaceRemoval.discarded,
+      discardReason: workspaceRemoval.reason
+    },
     preserved,
-    next: ["agent behaves normally", `draft-open ${state.feature || DEFAULT_FEATURE}`]
+    next: ["agent behaves normally", `draft-open ${state.feature || "<feature>"}`]
   };
 }
 
@@ -433,17 +539,384 @@ export function validateDraftkitState(state) {
   return { valid: errors.length === 0, errors };
 }
 
-async function ensurePreview(cwd, feature, sessionId, options) {
-  const previewPath = draftPreviewPath(cwd, feature);
-  const urlForPort = (port) => `http://localhost:${port}${previewPath}`;
-  const defaultUrl = urlForPort(DEFAULT_PORT);
+async function resolveOpenFeature(feature, cwd, active) {
+  if (feature) return normalizeFeature(feature);
+  if (active?.feature && active?.mode === "draft" && active?.isolation?.separated && active?.draftWorkspace?.path) {
+    const workspace = resolveWorkspacePath(cwd, active.draftWorkspace.path);
+    if (existsSync(workspace)) return normalizeFeature(active.feature);
+  }
+  throw new Error("feature-slug-required: feature slug is required when no isolated active draft can be resumed");
+}
 
-  if (await urlHealthy(defaultUrl)) {
+async function captureLiveBaseline(cwd) {
+  if (await isGitRepository(cwd)) {
+    const [commit, tree, status] = await Promise.all([
+      gitOutput(cwd, ["rev-parse", "HEAD"]),
+      gitOutput(cwd, ["rev-parse", "HEAD^{tree}"]),
+      gitStatusOutput(cwd)
+    ]);
     return {
-      preview: { url: defaultUrl, port: DEFAULT_PORT, owner: "external" },
-      process: null
+      type: "git",
+      commit: commit.trim(),
+      tree: tree.trim(),
+      dirty: status.trim().length > 0,
+      statusFingerprint: fingerprintText(status)
     };
   }
+
+  return {
+    type: "filesystem",
+    fingerprint: await filesystemFingerprint(cwd),
+    dirty: false
+  };
+}
+
+async function inspectLiveMovement(cwd, baseline) {
+  if (!baseline) {
+    return {
+      currentBaseline: null,
+      staleReasons: ["live baseline is missing from DraftKit state"]
+    };
+  }
+
+  try {
+    if (baseline.type === "git") {
+      if (!(await isGitRepository(cwd))) {
+        return {
+          currentBaseline: null,
+          staleReasons: ["live baseline cannot be compared because the current workspace is not a git repository"]
+        };
+      }
+      const [commit, tree, status] = await Promise.all([
+        gitOutput(cwd, ["rev-parse", "HEAD"]),
+        gitOutput(cwd, ["rev-parse", "HEAD^{tree}"]),
+        gitStatusOutput(cwd)
+      ]);
+      const currentBaseline = {
+        type: "git",
+        commit: commit.trim(),
+        tree: tree.trim(),
+        dirty: status.trim().length > 0,
+        statusFingerprint: fingerprintText(status)
+      };
+      const staleReasons = [];
+      if (baseline.commit && currentBaseline.commit !== baseline.commit) {
+        staleReasons.push(
+          `live baseline moved from commit ${baseline.commit} to ${currentBaseline.commit}; choose refresh/rebase, continue stale, or cancel`
+        );
+      } else if (baseline.tree && currentBaseline.tree !== baseline.tree) {
+        staleReasons.push("live baseline tree changed; choose refresh/rebase, continue stale, or cancel");
+      }
+      if ((baseline.statusFingerprint || "") !== currentBaseline.statusFingerprint) {
+        staleReasons.push("live working tree changed since the draft baseline; choose refresh/rebase, continue stale, or cancel");
+      }
+      return { currentBaseline, staleReasons };
+    }
+
+    const currentBaseline = {
+      type: "filesystem",
+      fingerprint: await filesystemFingerprint(cwd),
+      dirty: false
+    };
+    return {
+      currentBaseline,
+      staleReasons:
+        currentBaseline.fingerprint === baseline.fingerprint
+          ? []
+          : ["live filesystem baseline changed; choose refresh/rebase, continue stale, or cancel"]
+    };
+  } catch (error) {
+    return {
+      currentBaseline: null,
+      staleReasons: [`live baseline check failed: ${error.message}`]
+    };
+  }
+}
+
+async function ensureDraftWorkspace(cwd, feature, sessionId, liveBaseline, options) {
+  const paths = draftkitPaths(cwd);
+  const workspacePath = join(paths.workspacesDir, pathSegment(sessionId));
+  await rm(workspacePath, { recursive: true, force: true });
+  await mkdir(dirname(workspacePath), { recursive: true });
+
+  if (liveBaseline.type === "git" && (await isGitRepository(cwd))) {
+    try {
+      await gitOutput(cwd, ["worktree", "add", "--detach", workspacePath, liveBaseline.commit]);
+      await writeDraftWorkspaceMarker(workspacePath, { cwd, sessionId, feature });
+      return {
+        draftWorkspace: {
+          path: toRelative(cwd, workspacePath),
+          owner: "draftkit",
+          feature
+        },
+        isolation: {
+          status: "isolated",
+          strategy: "git-worktree",
+          separated: true,
+          baselineCommit: liveBaseline.commit,
+          limitation: liveBaseline.dirty
+            ? "The draft worktree is based on the recorded commit; uncommitted live changes are preserved in live but not copied into the draft workspace."
+            : null
+        }
+      };
+    } catch (error) {
+      await rm(workspacePath, { recursive: true, force: true });
+      if (options.requireGitWorktree) throw error;
+    }
+  }
+
+  await copyWorkspaceSnapshot(cwd, workspacePath);
+  await writeDraftWorkspaceMarker(workspacePath, { cwd, sessionId, feature });
+  return {
+    draftWorkspace: {
+      path: toRelative(cwd, workspacePath),
+      owner: "draftkit",
+      feature
+    },
+    isolation: {
+      status: "isolated",
+      strategy: "workspace-copy",
+      separated: true,
+      baselineFingerprint: liveBaseline.fingerprint || null,
+      limitation: "Copy sandbox fallback is local filesystem isolation, not a git worktree."
+    }
+  };
+}
+
+async function blockedCancelResult(paths, state, now, reason) {
+  await appendHistory(paths, {
+    type: "draft-cancel-blocked",
+    feature: state.feature || null,
+    sessionId: state.sessionId || null,
+    at: now,
+    reason
+  });
+  return {
+    command: "draft-cancel",
+    mode: state.mode || "draft",
+    state: "blocked",
+    feature: state.feature || null,
+    stoppedProcess: false,
+    stopReason: "cancel blocked before stopping preview",
+    cancellation: { blocked: true, reason },
+    isolation: {
+      ...(state.isolation || { strategy: "none", separated: false }),
+      discardedDraftWorkspace: false
+    },
+    preserved: [],
+    next: staleDecisionActions(state.feature)
+  };
+}
+
+async function syncDraftSpecsToWorkspace(cwd, workspaceRoot) {
+  const source = draftkitPaths(cwd).featuresDir;
+  const target = draftkitPaths(workspaceRoot).featuresDir;
+  if (!existsSync(source)) return;
+  await copyDirectory(source, target);
+}
+
+async function removeDraftWorkspace(cwd, state, options, validatedWorkspacePath = null) {
+  const workspacePath = validatedWorkspacePath || resolveWorkspacePath(cwd, state.draftWorkspace.path);
+  if (!existsSync(workspacePath)) {
+    return { discarded: true, reason: "draft workspace already absent" };
+  }
+
+  if (state.isolation?.strategy === "git-worktree" && (await isGitRepository(cwd))) {
+    try {
+      await gitOutput(cwd, ["worktree", "remove", "--force", workspacePath]);
+      return { discarded: true, reason: "removed git worktree" };
+    } catch (error) {
+      if (!options.forceRemoveWorkspace) throw error;
+    }
+  }
+
+  await rm(workspacePath, { recursive: true, force: true });
+  return { discarded: true, reason: "removed draft workspace directory" };
+}
+
+async function validateDraftWorkspaceIntegrity(cwd, state) {
+  if (!state.isolation?.separated || !state.draftWorkspace?.path) {
+    return {
+      valid: false,
+      reason: state.isolation?.reason || "cannot separate draft edits from live work without an isolated draft workspace"
+    };
+  }
+  if (state.draftWorkspace.owner !== "draftkit") {
+    return { valid: false, reason: "draft workspace is not marked as DraftKit-owned" };
+  }
+  if (typeof state.draftWorkspace.path !== "string" || isAbsolute(state.draftWorkspace.path)) {
+    return { valid: false, reason: "draft workspace path must be a relative DraftKit-owned path" };
+  }
+
+  const workspacePath = resolveWorkspacePath(cwd, state.draftWorkspace.path);
+  const workspacesRoot = draftkitPaths(cwd).workspacesDir;
+  const relToRoot = relative(workspacesRoot, workspacePath);
+  if (!relToRoot || relToRoot.startsWith("..") || isAbsolute(relToRoot)) {
+    return { valid: false, reason: "draft workspace path is outside DraftKit workspace storage" };
+  }
+
+  const expectedSegment = pathSegment(state.sessionId || "");
+  const [actualSegment] = relToRoot.split(/[\\/]/);
+  if (actualSegment !== expectedSegment) {
+    return { valid: false, reason: "draft workspace path does not match the active DraftKit session" };
+  }
+
+  if (!existsSync(workspacePath)) {
+    return { valid: false, reason: `draft workspace is missing: ${state.draftWorkspace.path}` };
+  }
+
+  const marker = await readJsonIfExists(join(workspacePath, DRAFT_WORKSPACE_MARKER));
+  if (!marker) return { valid: false, reason: "draft workspace marker is missing" };
+  if (marker.owner !== "draftkit") return { valid: false, reason: "draft workspace marker is not DraftKit-owned" };
+  if (marker.sessionId !== state.sessionId) return { valid: false, reason: "draft workspace marker session does not match" };
+  if (typeof marker.cwd !== "string" || resolve(marker.cwd) !== cwd) {
+    return { valid: false, reason: "draft workspace marker cwd does not match" };
+  }
+  if (typeof marker.feature !== "string" || marker.feature !== state.feature) {
+    return { valid: false, reason: "draft workspace marker feature does not match" };
+  }
+
+  return { valid: true, workspacePath };
+}
+
+async function writeDraftWorkspaceMarker(workspacePath, { cwd, sessionId, feature }) {
+  await writeJson(join(workspacePath, DRAFT_WORKSPACE_MARKER), {
+    owner: "draftkit",
+    sessionId,
+    feature,
+    cwd,
+    createdAt: new Date().toISOString()
+  });
+}
+
+function draftWorkspaceAbsolutePath(state, cwd) {
+  if (!state?.draftWorkspace?.path) return null;
+  return resolveWorkspacePath(cwd, state.draftWorkspace.path);
+}
+
+function resolveWorkspacePath(cwd, workspacePath) {
+  return resolve(cwd, workspacePath);
+}
+
+async function inspectLivePreview(cwd, state) {
+  if (state?.livePreview?.url) {
+    return {
+      ...state.livePreview,
+      healthy: await urlHealthy(state.livePreview.url)
+    };
+  }
+  const url = `http://localhost:${DEFAULT_PORT}/`;
+  const healthy = await urlHealthy(url);
+  return {
+    url: healthy ? url : null,
+    port: DEFAULT_PORT,
+    owner: healthy ? "external" : "none",
+    healthy
+  };
+}
+
+async function isGitRepository(cwd) {
+  try {
+    const output = await gitOutput(cwd, ["rev-parse", "--is-inside-work-tree"]);
+    return output.trim() === "true";
+  } catch {
+    return false;
+  }
+}
+
+async function gitOutput(cwd, args) {
+  const { stdout } = await execFileAsync("git", args, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024
+  });
+  return stdout;
+}
+
+async function gitStatusOutput(cwd) {
+  return gitOutput(cwd, [
+    "status",
+    "--porcelain",
+    "--untracked-files=all",
+    "--",
+    ".",
+    ":(exclude).draftspec/state",
+    ":(exclude).draftspec/logs"
+  ]);
+}
+
+async function copyWorkspaceSnapshot(sourceRoot, targetRoot) {
+  await mkdir(targetRoot, { recursive: true });
+  await copyDirectory(sourceRoot, targetRoot, (sourcePath) => {
+    const rel = toRelative(sourceRoot, sourcePath);
+    if (rel === ".") return true;
+    return !isIgnoredForWorkspaceCopy(rel);
+  });
+}
+
+async function copyDirectory(source, target, filter = () => true) {
+  if (!filter(source)) return;
+  await mkdir(target, { recursive: true });
+  let entries = [];
+  try {
+    entries = await readdir(source, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const sourcePath = join(source, entry.name);
+    if (!filter(sourcePath)) continue;
+    const targetPath = join(target, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirectory(sourcePath, targetPath, filter);
+    } else if (entry.isFile()) {
+      await mkdir(dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, await readFile(sourcePath));
+    }
+  }
+}
+
+function isIgnoredForWorkspaceCopy(rel) {
+  return (
+    rel === ".git" ||
+    rel.startsWith(".git/") ||
+    rel === "node_modules" ||
+    rel.startsWith("node_modules/") ||
+    rel === ".omx" ||
+    rel.startsWith(".omx/") ||
+    rel === ".draftspec/state" ||
+    rel.startsWith(".draftspec/state/") ||
+    rel === ".draftspec/logs" ||
+    rel.startsWith(".draftspec/logs/")
+  );
+}
+
+async function filesystemFingerprint(cwd) {
+  const files = await listFiles(cwd, {
+    ignoredDirs: new Set([".git", ".omx", "node_modules", ".draftspec/state", ".draftspec/logs"])
+  });
+  const parts = [];
+  for (const file of files.sort()) {
+    const rel = toRelative(cwd, file);
+    const content = await readFile(file, "utf8").catch(() => "");
+    parts.push(`${rel}\0${fingerprintText(content)}`);
+  }
+  return fingerprintText(parts.join("\n"));
+}
+
+function fingerprintText(value) {
+  let hash = 2166136261;
+  for (const char of String(value)) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+async function ensurePreview(cwd, workspaceRoot, feature, sessionId, options) {
+  const previewPath = draftPreviewPath(workspaceRoot, feature);
+  const urlForPort = (port) => `http://localhost:${port}${previewPath}`;
+  const livePreview = await inspectLivePreview(cwd, null);
 
   const port = await findAvailablePort(DEFAULT_PORT);
   const url = urlForPort(port);
@@ -451,10 +924,18 @@ async function ensurePreview(cwd, feature, sessionId, options) {
   await mkdir(paths.logsDir, { recursive: true });
   const logPath = join(paths.logsDir, `${sessionId}-preview.log`);
   const fd = openSync(logPath, "a");
-  const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
-    cwd,
+  const devServerPath = join(dirname(__filename), "dev-server.mjs");
+  const previewToken = randomBytes(24).toString("hex");
+  const child = spawn(process.execPath, [devServerPath], {
+    cwd: workspaceRoot,
     detached: true,
-    env: { ...process.env, PORT: String(port), DRAFTKIT_FEATURE: feature },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DRAFTKIT_FEATURE: feature,
+      DRAFTKIT_SESSION_ID: sessionId,
+      DRAFTKIT_PREVIEW_TOKEN: previewToken
+    },
     stdio: ["ignore", fd, fd]
   });
   child.unref();
@@ -466,12 +947,20 @@ async function ensurePreview(cwd, feature, sessionId, options) {
 
   return {
     preview: { url, port, owner: "draftkit" },
+    livePreview,
     process: {
       pid: child.pid,
-      cwd,
+      cwd: workspaceRoot,
       command: `${process.execPath} scripts/dev-server.mjs`,
       startedAt: isoNow(options.now),
       startedBy: "draft-open",
+      previewIdentity: {
+        url: `http://localhost:${port}/__draftkit/preview-identity`,
+        token: previewToken,
+        sessionId,
+        feature,
+        cwd: workspaceRoot
+      },
       logPath: toRelative(cwd, logPath)
     }
   };
@@ -547,13 +1036,46 @@ async function processAlive(pid) {
 }
 
 async function processMatchesDraftkit(processInfo, cwd) {
+  const expectedCwd = resolve(processInfo.cwd || cwd);
+  if (await previewIdentityMatches(processInfo, expectedCwd)) return true;
   if (process.platform !== "linux") {
-    return processInfo.cwd === cwd && String(processInfo.command || "").includes("scripts/dev-server.mjs");
+    return false;
   }
   try {
     const procCwd = await readlink(`/proc/${processInfo.pid}/cwd`);
     const cmdline = (await readFile(`/proc/${processInfo.pid}/cmdline`, "utf8")).replace(/\0/g, " ");
-    return resolve(procCwd) === cwd && cmdline.includes("scripts/dev-server.mjs");
+    return resolve(procCwd) === expectedCwd && cmdline.includes("dev-server.mjs");
+  } catch {
+    return false;
+  }
+}
+
+async function previewIdentityMatches(processInfo, expectedCwd) {
+  const identity = processInfo.previewIdentity;
+  if (!identity?.url || !identity.token) return false;
+  let identityUrl;
+  try {
+    identityUrl = new URL(identity.url);
+  } catch {
+    return false;
+  }
+  if (!["localhost", "127.0.0.1", "::1"].includes(identityUrl.hostname)) return false;
+  if (identityUrl.pathname !== "/__draftkit/preview-identity") return false;
+
+  try {
+    const response = await fetch(identityUrl, {
+      headers: { "x-draftkit-preview-token": identity.token },
+      signal: AbortSignal.timeout(700)
+    });
+    if (!response.ok) return false;
+    const payload = await response.json();
+    return (
+      payload.owner === "draftkit" &&
+      payload.pid === processInfo.pid &&
+      payload.sessionId === identity.sessionId &&
+      payload.feature === identity.feature &&
+      resolve(payload.cwd) === expectedCwd
+    );
   } catch {
     return false;
   }
@@ -649,6 +1171,19 @@ async function inspectSpecs(cwd, feature) {
     approvedSpec: toRelative(cwd, approvedPath),
     approvalStatus: approvedValidation.valid && approved.status === "approved" && approved.snapshotId ? "approved" : "invalid",
     snapshotId: approved.snapshotId || null
+  };
+}
+
+async function inspectDraftSessionSpecs(liveCwd, specRoot, feature) {
+  const draftInfo = await inspectSpecs(specRoot, feature);
+  if (resolve(specRoot) === resolve(liveCwd)) return draftInfo;
+
+  const liveInfo = await inspectSpecs(liveCwd, feature);
+  return {
+    ...draftInfo,
+    approvedSpec: liveInfo.approvedSpec || draftInfo.approvedSpec,
+    approvalStatus: liveInfo.approvalStatus !== "missing" ? liveInfo.approvalStatus : draftInfo.approvalStatus,
+    snapshotId: liveInfo.snapshotId || draftInfo.snapshotId
   };
 }
 
@@ -864,12 +1399,22 @@ async function listFiles(root, { ignoredDirs }) {
 }
 
 function nextActions({ stale = false, mode, approval, feature }) {
-  if (stale) return [`draft-open ${feature || DEFAULT_FEATURE}`, "draft-cancel", "draft-status"];
-  if (mode !== "draft") return [`draft-open ${feature || DEFAULT_FEATURE}`];
+  if (stale) return staleDecisionActions(feature);
+  if (mode !== "draft") return ["draft-open <feature>"];
   if (approval === "approved") {
     return ["draft-status", "draft-review", "draft-cancel", `draft-plan-to-go-live ${feature}`, `draft-implement-to-live ${feature}`];
   }
   return ["draft-status", "draft-review", "draft-approve", "draft-cancel"];
+}
+
+function staleDecisionActions(feature) {
+  const safeFeature = feature || "<feature>";
+  return [
+    `choose refresh/rebase for ${safeFeature}`,
+    `choose continue stale for ${safeFeature}`,
+    "draft-cancel",
+    "draft-status"
+  ];
 }
 
 async function ensureRuntimeDirs(paths) {
@@ -893,14 +1438,22 @@ async function appendHistory(paths, event) {
 }
 
 function sessionStatePath(cwd, sessionId) {
-  return join(cwd, ".draftspec", "state", "sessions", sessionId, "draftkit-state.json");
+  return join(cwd, ".draftspec", "state", "sessions", pathSegment(sessionId), "draftkit-state.json");
 }
 
 function normalizeFeature(feature) {
   if (!feature || !FEATURE_PATTERN.test(feature)) {
-    throw new Error("Feature must be a lowercase slug, for example bulk-tagging");
+    throw new Error("Feature must be a lowercase slug, for example board-columns");
   }
   return feature;
+}
+
+function pathSegment(value) {
+  const safe = String(value || "session")
+    .replace(/[^A-Za-z0-9._-]/g, "-")
+    .slice(0, 120)
+    .replace(/^-+|-+$/g, "");
+  return safe || "session";
 }
 
 function titleFromFeature(feature) {
@@ -944,6 +1497,28 @@ function formatResult(result) {
   if (result.state) lines.push(`state: ${result.state}`);
   lines.push(`feature: ${result.feature || "none"}`);
   if (result.preview) lines.push(`preview: ${result.preview.url || "none"}`);
+  if (result.draftPreview) lines.push(`draftPreview: ${result.draftPreview.url || "none"}`);
+  if (result.livePreview) lines.push(`livePreview: ${result.livePreview.url || "none"}`);
+  if (result.liveBaseline) {
+    lines.push(
+      `liveBaseline: ${result.liveBaseline.type || "unknown"} ${result.liveBaseline.commit || result.liveBaseline.fingerprint || "unknown"}`
+    );
+  }
+  if (result.currentLiveBaseline) {
+    lines.push(
+      `currentLiveBaseline: ${result.currentLiveBaseline.type || "unknown"} ${result.currentLiveBaseline.commit || result.currentLiveBaseline.fingerprint || "unknown"}`
+    );
+  }
+  if (result.draftWorkspace) lines.push(`draftWorkspace: ${result.draftWorkspace.path || "none"}`);
+  if (result.isolation) {
+    lines.push(
+      `isolation: ${result.isolation.status || "unknown"} (${result.isolation.strategy || "unknown"})`
+    );
+    if (result.isolation.limitation) lines.push(`isolationLimitation: ${result.isolation.limitation}`);
+    if ("discardedDraftWorkspace" in result.isolation) {
+      lines.push(`discardedDraftWorkspace: ${result.isolation.discardedDraftWorkspace}`);
+    }
+  }
   if ("approval" in result) lines.push(`approval: ${result.approval}`);
   if (result.snapshotId) lines.push(`snapshotId: ${result.snapshotId}`);
   if (result.draftSpec) lines.push(`draftSpec: ${result.draftSpec}`);
@@ -956,6 +1531,10 @@ function formatResult(result) {
   if (result.preserved?.length) lines.push(`preserved: ${result.preserved.join(", ")}`);
   if ("stoppedProcess" in result) lines.push(`stoppedProcess: ${result.stoppedProcess}`);
   if (result.stopReason) lines.push(`stopReason: ${result.stopReason}`);
+  if (result.cancellation) {
+    lines.push(`cancellationBlocked: ${result.cancellation.blocked}`);
+    if (result.cancellation.reason) lines.push(`cancellationReason: ${result.cancellation.reason}`);
+  }
   if (result.backendTarget) {
     lines.push(
       `backendTarget: ${typeof result.backendTarget === "string" ? result.backendTarget : result.backendTarget.type}`
@@ -977,7 +1556,7 @@ async function main(argv) {
       result = await draftStatus();
       break;
     case "open":
-      result = await draftOpen(feature || DEFAULT_FEATURE, { startPreview: !noPreview });
+      result = await draftOpen(feature, { startPreview: !noPreview });
       break;
     case "cancel":
       result = await draftCancel();

@@ -25,7 +25,7 @@ Use the direct Node command for Codex Desktop, WSL, and Linux sessions. Do not r
 - Write `.draftspec/go-live/<feature>.plan.md` and `.draftspec/go-live/<feature>.plan.json`.
 - Tie every plan to the approved snapshot ID.
 - Do not implement backend code in this button.
-- Plan how approved product behavior maps onto the app's existing backend architecture; do not propose a different backend/database architecture unless the user explicitly asks for that outside DraftKit.
+- Plan how approved frontend-only product behavior maps onto the app's existing backend architecture; do not propose a different backend/database architecture unless the user explicitly asks for that outside DraftKit.
 
 ## Output
 

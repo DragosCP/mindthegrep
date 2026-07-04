@@ -17,7 +17,7 @@ Use the direct Node command for Codex Desktop, WSL, and Linux sessions. Do not r
 
 ## Rules
 
-- Restore the pre-draft live baseline by discarding or reverting draft-session edits.
+- Restore the pre-draft live baseline by discarding the isolated draft workspace/state or reverting only draft-session edits.
 - Do not revert unrelated user work that existed before `draft-open`.
 - If DraftKit cannot safely separate draft edits from pre-existing changes, block with a clear recovery path instead of claiming the draft was discarded.
 - Preserve approved snapshots. Preserve cancelled draft artifacts only as evidence when they do not keep the cancelled draft active in the app.
@@ -25,7 +25,7 @@ Use the direct Node command for Codex Desktop, WSL, and Linux sessions. Do not r
 - Append a local history event under `.draftspec/logs/`.
 - Stop a process only when recorded state proves DraftKit started it and the current process identity still matches.
 - Never kill a process based on PID alone.
-- Current MVP limitation: `node ./scripts/draftkit-session.mjs cancel` may only clear runtime state. If source files remain changed after cancel, report that as incomplete cancellation.
+- If a legacy or damaged session cannot prove isolated draft workspace/state, leave active state in place and report the cancellation block.
 
 ## Output
 

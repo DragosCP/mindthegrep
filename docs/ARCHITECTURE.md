@@ -5,7 +5,7 @@
 DraftKit has four small parts:
 
 - `SpecGraph`: deterministic behavior graph for UI, workflow, fixtures, and backend hints.
-- `FakeBackend`: current code name for the local draft data adapter. It is frontend-only draft behavior, not a product backend.
+- Local draft data adapter/state: frontend-only draft behavior that makes the workflow feel real without becoming a product backend.
 - `BulkTaggingDraftFlow`: user workflow controller that records state transitions while mutating local draft state.
 - `BackendMapper`: converts an approved graph into backend implementation tasks.
 
@@ -54,7 +54,7 @@ This keeps product semantics clear:
 - approval freezes the accepted behavior;
 - go-live maps approved behavior onto the current app intentionally.
 
-If the live app changes while a draft exists, DraftKit should not silently replay the draft on top of the new live state. It should mark the draft stale and require an explicit refresh/rebase/cancel decision.
+If the live app changes while a draft exists, DraftKit should not silently replay the draft on top of the new live state. It should mark the draft stale and require an explicit refresh/rebase, continue stale, or cancel decision.
 
 ## Session Runtime
 
@@ -68,9 +68,9 @@ If the live app changes while a draft exists, DraftKit should not silently repla
 
 The active mirror helps agents answer "what draft is open right now?" The session file is the durable runtime copy for that session. Status treats missing sessions, cwd drift, unhealthy previews, and dead recorded preview processes as stale state instead of silently trusting them.
 
-`draft-cancel` currently clears the active mirror, marks the session cancelled, appends history, and preserves draft and approved specs. It only stops a preview process when the recorded process identity still proves DraftKit started it. That is an MVP limitation. The target behavior is to discard the isolated draft workspace/overlay and restore the pre-draft live baseline without reverting unrelated user work.
+`draft-cancel` clears the active mirror, marks the session cancelled, appends history, preserves draft and approved specs, and discards the isolated DraftKit-owned workspace. It only stops a preview process when the recorded process identity still proves DraftKit started it. If runtime state cannot prove draft edits are separated from live work, cancellation blocks with a recovery message instead of reverting user files by guesswork.
 
-`draft-open <feature>` previews an existing example route at `examples/<feature>/` when present. For new feature slugs it uses the generic `/draftkit/<feature>/` host, which renders the current `.draftspec` scaffold instead of claiming a feature-specific route exists.
+`draft-open <feature>` records the live baseline, creates or resumes isolated draft workspace/state, and previews an existing example route at `examples/<feature>/` when present. For new feature slugs it uses the generic `/draftkit/<feature>/` host, which renders the current `.draftspec` scaffold instead of claiming a feature-specific route exists. If no feature slug is supplied, it may resume an isolated active draft; otherwise it should fail instead of defaulting to a sample feature.
 
 ## Go-Live Gates
 

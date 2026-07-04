@@ -11,11 +11,11 @@ Build the feature as a draft-only workflow.
 
 - If a DraftKit session is already active, use `node ./scripts/draftkit-session.mjs status` as evidence before editing.
 - Edit only inside the isolated draft workspace/state for that session.
-- If the active draft is stale because live moved, ask for an explicit refresh/rebase, continue-stale, or cancel decision before editing.
+- If the active draft is stale because live moved, require an explicit refresh/rebase, continue stale, or cancel decision before editing.
 - If no session is active and the user is starting a draft, open one with `node ./scripts/draftkit-session.mjs open <feature>`.
 - Preserve the app shell, navigation, and shared components.
 - Do not edit real backend routes, database code, migrations, or production API clients.
-- Use local draft data adapters, fixtures, browser-local state, or local persistence.
+- Use local draft data adapter/state, fixtures, browser-local state, or local persistence.
 - Record every meaningful user action in `.draftspec/features/<feature>.json`.
 - Include UI locations, workflow states, success paths, failure paths, fixture data, and backend contract hints.
 - Make the workflow clickable enough for a human to feel it in context.

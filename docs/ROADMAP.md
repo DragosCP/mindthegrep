@@ -19,6 +19,7 @@
 - Project-local DraftKit button skills and npm scripts for status, open, cancel, plan-to-go-live, and implement-to-live.
 - Direct Node button commands for Codex Desktop/WSL UNC reliability, with npm aliases kept for WSL/Linux shells and CI.
 - Session-aware DraftKit runtime state under `.draftspec/state/`.
+- Isolated draft workspace/state based on a recorded live baseline, preferably through git worktrees or sandboxes where available.
 - Local ignored operational logs under `.draftspec/logs/`.
 - Generic DraftKit preview host for new feature slugs before a feature-specific example route exists.
 - Approval-gated go-live planning and fixture-backed implementation artifacts.

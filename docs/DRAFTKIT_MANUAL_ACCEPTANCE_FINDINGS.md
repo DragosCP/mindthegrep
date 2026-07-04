@@ -6,7 +6,9 @@ Source: first consumer install and todo draft run in a fresh `xyz_ex` project us
 
 ## 1. Draft Cancel Must Restore The Live Baseline
 
-Issue: `draft-cancel` currently exits DraftKit runtime state and may stop the DraftKit-owned preview, but it does not restore source files edited during the draft. In the manual test, cancelling the draft returned `mode: live` while the live app still showed the draft redesign because the same working tree files had been changed.
+Original issue: `draft-cancel` exited DraftKit runtime state and could stop the DraftKit-owned preview, but it did not restore source files edited during the draft. In the manual test, cancelling the draft returned `mode: live` while the live app still showed the draft redesign because the same working tree files had been changed.
+
+Implemented behavior: new draft sessions record a live baseline and use isolated DraftKit-owned workspace/state. `draft-cancel` discards that workspace and blocks legacy or damaged sessions when it cannot prove draft edits are separate from live work.
 
 This violates the product expectation of a draft. A cancelled draft should be discarded, not merely marked inactive.
 
@@ -50,7 +52,7 @@ Required explicit choices when live moves:
 
 Product rule:
 
-- DraftKit is for trying product behavior before backend implementation, not for trying a different backend/database architecture. Approved draft behavior should later be mapped onto the app's existing backend architecture.
+- DraftKit is for trying product behavior in frontend-only draft mode before backend implementation, not for trying a different backend/database architecture. Approved draft behavior should later be mapped onto the app's existing backend architecture.
 
 ## 3. Draft Preview Must Use A Dedicated Port
 
@@ -82,7 +84,7 @@ In a consumer project, invoking `draft-open` without an explicit feature should 
 Preferred behavior:
 
 - if an isolated active draft session exists, resume that active feature;
-- if no isolated active draft session exists, require or infer a feature slug from the prompt;
+- if no isolated active draft session exists, require an explicit feature slug;
 - avoid sample-specific defaults in installed consumer projects.
 
 ## 5. Install Should Hide Git Setup Details
