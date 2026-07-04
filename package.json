@@ -8,10 +8,17 @@
     "test": "node --test tests/*.test.js",
     "draftkit:init": "node scripts/draftkit-init.mjs",
     "draftkit:validate": "node scripts/validate-draftspec.mjs",
+    "draftkit:status": "node scripts/draftkit-session.mjs status",
+    "draftkit:open": "node scripts/draftkit-session.mjs open",
+    "draftkit:open:bulk-tagging": "node scripts/draftkit-session.mjs open bulk-tagging",
+    "draftkit:cancel": "node scripts/draftkit-session.mjs cancel",
+    "draftkit:plan-to-go-live": "node scripts/draftkit-session.mjs plan-to-go-live",
+    "draftkit:implement-to-live": "node scripts/draftkit-session.mjs implement-to-live",
     "validate:spec": "node scripts/validate-spec.mjs .draftspec/features/bulk-tagging.json",
     "export:bulk-tagging": "node scripts/export-bulk-tagging-spec.mjs",
     "approve:bulk-tagging": "node scripts/approve-spec.mjs .draftspec/features/bulk-tagging.json .draftspec/features/bulk-tagging.approved.json",
     "map:bulk-tagging": "node scripts/map-backend.mjs .draftspec/features/bulk-tagging.approved.json",
-    "dev": "node scripts/dev-server.mjs"
+    "dev": "node scripts/dev-server.mjs",
+    "dev:bulk-tagging": "DRAFTKIT_FEATURE=bulk-tagging node scripts/dev-server.mjs"
   }
 }

@@ -20,7 +20,7 @@ npm run draftkit:validate
 npm run validate:spec
 npm run approve:bulk-tagging
 npm run map:bulk-tagging
-npm run dev
+npm run dev:bulk-tagging
 ```
 
 Then open `http://localhost:5173/examples/bulk-tagging/`.

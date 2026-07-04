@@ -5,7 +5,7 @@
 - `npm run validate:spec` validates `.draftspec/features/bulk-tagging.json`.
 - `npm run approve:bulk-tagging` writes an approved snapshot.
 - `npm run map:bulk-tagging` emits backend tasks from the approved snapshot.
-- `npm run dev` serves a clickable bulk-tagging demo.
+- `npm run dev:bulk-tagging` serves the explicit clickable bulk-tagging demo.
 - `npm run draftkit:init -- <target-app>` installs local draft skills, validator scripts, protected-file checks, and package scripts into a downstream app.
 - Protected-file checks fail if draft work mutates live database/backend files.
 - UI-only drafts with `backendContracts: []` are valid, and approved UI-only specs map to no backend tasks.

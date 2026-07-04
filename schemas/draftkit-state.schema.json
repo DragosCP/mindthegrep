@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindthegrep.local/schemas/draftkit-state.schema.json",
+  "title": "DraftKit Runtime State",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "cwd",
+    "surface",
+    "mode",
+    "phase",
+    "feature",
+    "preview",
+    "process",
+    "draftSpec",
+    "approvedSpec",
+    "snapshotId",
+    "approvalStatus",
+    "checks",
+    "lastAction",
+    "lastUpdatedAt",
+    "sessionStatePath",
+    "next"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "cwd": { "type": "string", "minLength": 1 },
+    "surface": { "type": "string", "minLength": 1 },
+    "mode": { "enum": ["draft", "live"] },
+    "phase": { "enum": ["open", "cancelled", "planned", "implemented"] },
+    "feature": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "preview": {
+      "type": "object",
+      "required": ["url", "port"],
+      "additionalProperties": true,
+      "properties": {
+        "url": { "type": ["string", "null"] },
+        "port": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 },
+        "owner": { "type": ["string", "null"] }
+      }
+    },
+    "process": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "pid": { "type": "integer" },
+        "cwd": { "type": "string" },
+        "command": { "type": "string" },
+        "startedAt": { "type": "string" },
+        "startedBy": { "const": "draft-open" }
+      }
+    },
+    "draftSpec": { "type": "string", "minLength": 1 },
+    "approvedSpec": { "type": ["string", "null"] },
+    "snapshotId": { "type": ["string", "null"] },
+    "approvalStatus": { "enum": ["missing", "unapproved", "approved", "invalid"] },
+    "checks": { "type": "array" },
+    "lastAction": { "type": "string", "minLength": 1 },
+    "lastUpdatedAt": { "type": "string", "minLength": 1 },
+    "sessionStatePath": {
+      "type": "string",
+      "pattern": "^\\.draftspec/state/sessions/[^/]+/draftkit-state\\.json$"
+    },
+    "next": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

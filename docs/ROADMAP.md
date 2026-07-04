@@ -19,9 +19,23 @@
 
 ## 0.3 Agent Workflow
 
-- Package skills as a Codex plugin.
-- Add OMX-compatible state handoffs.
-- Add draft/live guardrails that block backend edits before approval.
+- Project-local DraftKit button skills and direct Node runtime commands for
+  `draft-status`, `draft-open`, `draft-cancel`, `draft-plan-to-go-live`, and
+  `draft-implement-to-live`.
+- Session-aware runtime state under `.draftspec/state/` with local history under
+  `.draftspec/logs/`.
+- Isolated draft workspaces based on a recorded live baseline.
+- DraftKit-owned preview ports with identity-based health checks.
+- Read-only status reporting for baseline, workspace, preview identity, stale
+  reasons, and next actions.
+- Cancellation that deletes only isolated DraftKit-owned draft state and
+  preserves unrelated live work.
+- Approval-gated go-live planning and implementation from snapshots with
+  `status: "approved"` and `snapshotId`.
+- Generic preview fallback for feature slugs that do not yet have an example
+  route, without exposing implementation/debug labels in product UI.
+- Future: package the buttons as a Codex plugin with optional hooks for
+  draft/live guardrails.
 
 ## 0.4 Backend Integration
 

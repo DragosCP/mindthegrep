@@ -5,10 +5,24 @@ import path from "node:path";
 
 const DRAFTKIT_BLOCK_START = "<!-- DRAFTKIT:START -->";
 const DRAFTKIT_BLOCK_END = "<!-- DRAFTKIT:END -->";
-const SKILL_NAMES = ["draft-feature", "draft-review", "draft-approve", "draft-integrate"];
+const SKILL_NAMES = [
+  "draft-status",
+  "draft-open",
+  "draft-cancel",
+  "draft-feature",
+  "draft-review",
+  "draft-approve",
+  "draft-plan-to-go-live",
+  "draft-implement-to-live",
+  "draft-integrate"
+];
 const PROTECTED_CONFIG_PATH = ".draftspec/protected-files.json";
 const VALIDATOR_SCRIPT = "scripts/validate-draftspec.mjs";
 const PROTECTED_SCRIPT = "scripts/check-protected-files.mjs";
+const RUNTIME_SCRIPTS = ["scripts/draftkit-session.mjs", "scripts/draftkit-preview-server.mjs"];
+const RUNTIME_SCHEMA = "schemas/draftkit-state.schema.json";
+const RUNTIME_SOURCE_DIR = "src/draftkit";
+const DRAFTKIT_GITIGNORE_LINES = [".draftspec/state/", ".draftspec/logs/"];
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -40,6 +54,8 @@ export async function initDraftKit({ targetDir, force = false }) {
   await mkdir(path.join(targetRoot, ".codex/skills"), { recursive: true });
   await mkdir(path.join(targetRoot, ".draftspec/features"), { recursive: true });
   await mkdir(path.join(targetRoot, "scripts"), { recursive: true });
+  await mkdir(path.join(targetRoot, "schemas"), { recursive: true });
+  await mkdir(path.join(targetRoot, "src"), { recursive: true });
 
   for (const skillName of SKILL_NAMES) {
     const source = path.join(repoRoot, ".codex/skills", skillName);
@@ -57,9 +73,27 @@ export async function initDraftKit({ targetDir, force = false }) {
     result,
     label: PROTECTED_SCRIPT
   });
+  for (const runtimeScript of RUNTIME_SCRIPTS) {
+    await copyGeneratedPath(path.join(repoRoot, runtimeScript), path.join(targetRoot, runtimeScript), {
+      force,
+      result,
+      label: runtimeScript
+    });
+  }
+  await copyGeneratedPath(path.join(repoRoot, RUNTIME_SCHEMA), path.join(targetRoot, RUNTIME_SCHEMA), {
+    force,
+    result,
+    label: RUNTIME_SCHEMA
+  });
+  await copyGeneratedPath(path.join(repoRoot, RUNTIME_SOURCE_DIR), path.join(targetRoot, RUNTIME_SOURCE_DIR), {
+    force,
+    result,
+    label: RUNTIME_SOURCE_DIR
+  });
 
   await updateAgentsFile(targetRoot, result);
   await updatePackageScripts(targetRoot, { force, result });
+  await updateGitignore(targetRoot, result);
 
   const protectedFiles = await detectProtectedFiles(targetRoot);
   result.protectedFiles = protectedFiles;
@@ -123,6 +157,8 @@ async function updateAgentsFile(targetRoot, result) {
 Use DraftKit when the builder asks to prototype or revise workflow behavior before backend work.
 
 - Build draft features in the current live app shell.
+- Use \`node ./scripts/draftkit-session.mjs open <feature>\` to create an isolated draft session before draft edits.
+- Use \`node ./scripts/draftkit-session.mjs status\` for read-only baseline, workspace, preview, and stale-state evidence.
 - Keep draft behavior frontend-only with local state, fixtures, fake adapters, or localStorage.
 - Do not edit real backend routes, database files, migrations, schema files, or production API clients during draft mode.
 - Record UI locations, states, actions, fixtures, and deferred backend hints in \`.draftspec/features/<feature>.json\`.
@@ -143,6 +179,11 @@ async function updatePackageScripts(targetRoot, { force, result }) {
 
   const scripts = {
     "draftkit:validate": "node scripts/validate-draftspec.mjs",
+    "draftkit:status": "node scripts/draftkit-session.mjs status",
+    "draftkit:open": "node scripts/draftkit-session.mjs open",
+    "draftkit:cancel": "node scripts/draftkit-session.mjs cancel",
+    "draftkit:plan-to-go-live": "node scripts/draftkit-session.mjs plan-to-go-live",
+    "draftkit:implement-to-live": "node scripts/draftkit-session.mjs implement-to-live",
     "draftkit:protect:snapshot":
       "node scripts/check-protected-files.mjs snapshot .draftspec/protected-files.json .draftspec/protected-files.snapshot.json",
     "draftkit:protect:check": "node scripts/check-protected-files.mjs check .draftspec/protected-files.snapshot.json"
@@ -158,6 +199,20 @@ async function updatePackageScripts(targetRoot, { force, result }) {
   }
 
   await writeFile(packagePath, `${stableStringify(packageJson)}\n`);
+}
+
+async function updateGitignore(targetRoot, result) {
+  const gitignorePath = path.join(targetRoot, ".gitignore");
+  const existing = (await exists(gitignorePath)) ? await readFile(gitignorePath, "utf8") : "";
+  const missing = DRAFTKIT_GITIGNORE_LINES.filter((line) => !existing.split(/\r?\n/).includes(line));
+  if (missing.length === 0) {
+    result.kept.push(".gitignore DraftKit runtime ignores");
+    return;
+  }
+
+  const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
+  await writeFile(gitignorePath, `${existing}${prefix}${missing.join("\n")}\n`);
+  result.installed.push(".gitignore DraftKit runtime ignores");
 }
 
 async function detectProtectedFiles(targetRoot) {

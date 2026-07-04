@@ -1,4 +1,6 @@
 .omx/
+.draftspec/state/
+.draftspec/logs/
 .codex/*
 !.codex/agents/
 !.codex/agents/**

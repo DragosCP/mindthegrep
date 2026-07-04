@@ -18,13 +18,28 @@ test("draftkit:init installs a draft bridge into a downstream app", async () => 
   assert.match(await readFile(path.join(appRoot, "AGENTS.md"), "utf8"), /DRAFTKIT:START/);
   assert.match(await readFile(path.join(appRoot, "AGENTS.md"), "utf8"), /draftkit:protect:snapshot.*before draft edits/s);
   await assertFile(path.join(appRoot, ".codex/skills/draft-feature/SKILL.md"));
+  await assertFile(path.join(appRoot, ".codex/skills/draft-open/SKILL.md"));
+  await assertFile(path.join(appRoot, ".codex/skills/draft-status/SKILL.md"));
+  await assertFile(path.join(appRoot, ".codex/skills/draft-cancel/SKILL.md"));
+  await assertFile(path.join(appRoot, ".codex/skills/draft-plan-to-go-live/SKILL.md"));
+  await assertFile(path.join(appRoot, ".codex/skills/draft-implement-to-live/SKILL.md"));
   await assertFile(path.join(appRoot, ".codex/skills/draft-integrate/SKILL.md"));
+  await assertFile(path.join(appRoot, "scripts/draftkit-session.mjs"));
+  await assertFile(path.join(appRoot, "scripts/draftkit-preview-server.mjs"));
   await assertFile(path.join(appRoot, "scripts/validate-draftspec.mjs"));
   await assertFile(path.join(appRoot, "scripts/check-protected-files.mjs"));
+  await assertFile(path.join(appRoot, "schemas/draftkit-state.schema.json"));
+  await assertFile(path.join(appRoot, "src/draftkit/index.js"));
 
   const packageJson = JSON.parse(await readFile(path.join(appRoot, "package.json"), "utf8"));
   assert.equal(packageJson.scripts.test, "node --test");
   assert.equal(packageJson.scripts["draftkit:validate"], "node scripts/validate-draftspec.mjs");
+  assert.equal(packageJson.scripts["draftkit:status"], "node scripts/draftkit-session.mjs status");
+  assert.equal(packageJson.scripts["draftkit:open"], "node scripts/draftkit-session.mjs open");
+  assert.equal(packageJson.scripts["draftkit:cancel"], "node scripts/draftkit-session.mjs cancel");
+  assert.equal(packageJson.scripts["draftkit:plan-to-go-live"], "node scripts/draftkit-session.mjs plan-to-go-live");
+  assert.equal(packageJson.scripts["draftkit:implement-to-live"], "node scripts/draftkit-session.mjs implement-to-live");
+  assert.equal(packageJson.scripts["draftkit:open:bulk-tagging"], undefined);
   assert.equal(
     packageJson.scripts["draftkit:protect:snapshot"],
     "node scripts/check-protected-files.mjs snapshot .draftspec/protected-files.json .draftspec/protected-files.snapshot.json"
@@ -36,6 +51,10 @@ test("draftkit:init installs a draft bridge into a downstream app", async () => 
 
   const protectedConfig = JSON.parse(await readFile(path.join(appRoot, ".draftspec/protected-files.json"), "utf8"));
   assert.deepEqual(protectedConfig.files, ["data/tasks.json", "src/db.js", "src/server.js"]);
+
+  const gitignore = await readFile(path.join(appRoot, ".gitignore"), "utf8");
+  assert.match(gitignore, /^\.draftspec\/state\/$/m);
+  assert.match(gitignore, /^\.draftspec\/logs\/$/m);
 });
 
 test("draftkit:init is idempotent and preserves existing app content", async () => {
