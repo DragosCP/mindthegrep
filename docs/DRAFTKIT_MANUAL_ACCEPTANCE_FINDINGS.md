@@ -30,7 +30,29 @@ Acceptance check:
 
 - after `draft-cancel`, starting or reloading the live app should show the pre-draft UI, not the cancelled draft UI.
 
-## 2. Draft Preview Must Use A Dedicated Port
+## 2. Drafts Must Be Based On A Live Checkpoint
+
+Issue: an "active draft" cannot safely mean loose edits in the same working tree as live work. If live files and draft files are both changing in one folder, DraftKit cannot clearly answer what live is, what cancel should restore, or what happens when live moves while a draft is open.
+
+Required behavior:
+
+- `draft-open <feature>` should record the live baseline, such as a commit or tree hash.
+- Draft edits should happen in an isolated worktree, sandbox, or overlay based on that live baseline.
+- `draft-status` should report the draft's live baseline and whether it is current or stale.
+- If live changes after the draft opens, DraftKit should mark the draft stale.
+- DraftKit should not silently patch/rebase a draft onto the new live state.
+
+Required explicit choices when live moves:
+
+- refresh/rebase the draft onto the new live baseline;
+- continue the draft from the old baseline with a visible stale warning;
+- cancel and discard the draft.
+
+Product rule:
+
+- DraftKit is for trying product behavior before backend implementation, not for trying a different backend/database architecture. Approved draft behavior should later be mapped onto the app's existing backend architecture.
+
+## 3. Draft Preview Must Use A Dedicated Port
 
 Issue: `draft-open` may reuse a healthy default preview port, such as `5173`, even when that port is already serving the live app. This makes it hard to compare the live app and draft app side by side.
 
@@ -53,17 +75,17 @@ Possible isolation strategies:
 
 This is closely related to cancellation: if draft edits are isolated from the live baseline, `draft-cancel` can discard the draft cleanly instead of leaving the live app changed.
 
-## 3. `draft-open` Needs Safer Feature Defaults
+## 4. `draft-open` Needs Safer Feature Defaults
 
 In a consumer project, invoking `draft-open` without an explicit feature should not fall back to a sample feature such as `bulk-tagging`.
 
 Preferred behavior:
 
-- if an active draft exists, resume that active feature;
-- if no active draft exists, require or infer a feature slug from the prompt;
+- if an isolated active draft session exists, resume that active feature;
+- if no isolated active draft session exists, require or infer a feature slug from the prompt;
 - avoid sample-specific defaults in installed consumer projects.
 
-## 4. Install Should Hide Git Setup Details
+## 5. Install Should Hide Git Setup Details
 
 The manual test required the user to care about whether the fresh folder was already a git repository. That is acceptable for a raw acceptance scaffold, but it should not be part of the product experience.
 
@@ -74,7 +96,7 @@ Target behavior for `npx draftkit init`:
 - optionally support `npx draftkit init --init-git`;
 - do not silently run `git init` by default.
 
-## 5. Skill Discovery Needs Clear Session Guidance
+## 6. Skill Discovery Needs Clear Session Guidance
 
 Project-local `.codex/skills/draft-*` files may not appear in an already-open Codex session immediately after install.
 
@@ -84,7 +106,7 @@ Required behavior:
 - docs should provide direct Node command fallbacks for the current session;
 - future installer should verify skill files exist and report their paths.
 
-## 6. Draft UI Should Avoid Product-Facing Debug Labels
+## 7. Draft UI Should Avoid Product-Facing Debug Labels
 
 The draft app is meant to feel like the real product workflow. Labels such as `Draft`, implementation details, storage technology, or internal status should not become part of the user-facing product UI unless explicitly requested.
 
@@ -93,7 +115,7 @@ Preferred behavior:
 - keep draft/debug metadata in agent output, status commands, or a separate development overlay;
 - keep the product surface focused on the workflow a real user would experience.
 
-## 7. Draft Iterations Must Preserve Accepted Constraints
+## 8. Draft Iterations Must Preserve Accepted Constraints
 
 Visual iteration prompts should not silently change accepted technical/product constraints. For example, a UI polish pass should not replace an accepted local database boundary with a weaker local storage approach unless the change is deliberate and recorded.
 
@@ -103,7 +125,7 @@ Required behavior:
 - if a constraint changes, call it out and update the `.draftspec` graph;
 - keep backend/storage hints aligned with the actual draft behavior.
 
-## 8. Draft And Scaffold Checkpoints Need Clearer Phase Boundaries
+## 9. Draft And Scaffold Checkpoints Need Clearer Phase Boundaries
 
 The test correctly created an initial scaffold commit and left todo app draft changes uncommitted, but this phase boundary is easy for agents to blur.
 

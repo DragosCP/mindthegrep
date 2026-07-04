@@ -11,6 +11,29 @@ Use `node ./scripts/draftkit-session.mjs ...` as the reliable button command fro
 
 The buttons coordinate draft sessions. They do not weaken the core safety rule: live integration requires an approved `.draftspec` snapshot with `status: "approved"` and `snapshotId`.
 
+## Draft Baseline And Isolation
+
+The final product contract should treat each draft as an isolated session based on a specific live checkpoint.
+
+```text
+live baseline: commit/tree abc123
+draft session: isolated changes on top of abc123
+```
+
+A draft should not be mixed into the same mutable working tree as live work. Otherwise `live`, `draft`, `cancel`, and `approve` become ambiguous.
+
+Required model:
+
+- `draft-open <feature>` records the live baseline before draft edits begin.
+- Draft edits happen in an isolated worktree, sandbox, or overlay, not directly on top of the live working tree.
+- The live app can keep running from the live baseline.
+- The draft app runs from the isolated draft state on a DraftKit-owned preview port.
+- `draft-cancel` discards the isolated draft and restores the user to the live baseline.
+- `draft-approve` freezes the accepted draft behavior.
+- `draft-implement-to-live` applies only approved behavior to the current live app.
+
+If live changes while a draft exists, DraftKit should not silently replay the draft. It should mark the draft stale and require an explicit user action such as refresh/rebase, continue from the old baseline, or cancel.
+
 ## Target Install Model
 
 The current GitHub-branch copy workflow is a manual acceptance scaffold, not the final product install story.
@@ -85,15 +108,18 @@ Status treats missing session files, cwd drift, unhealthy previews, and dead rec
 
 It:
 
+- records the live baseline for the draft session
 - locates or creates `.draftspec/features/<feature>.json`
-- starts a preview server or reuses a healthy preview
+- starts or reuses a DraftKit-owned preview for the isolated draft state
 - opens `examples/<feature>/` when that example exists
 - otherwise opens the generic DraftKit host at `/draftkit/<feature>/`, rendering the current draft spec as a scaffold preview
 - writes both the session state and active mirror
 - appends local session history
 - reports the preview, spec path, approval state, advisory guardrail level, and next actions
 
-While draft mode is active, agents should keep work inside the existing app shell, use fake/local state, and avoid real backend, database, schema, queue, or production API edits unless an approved go-live workflow is running.
+While draft mode is active, agents should keep work inside the existing app shell, use local draft data/state, and avoid real backend, database, schema, queue, or production API edits unless an approved go-live workflow is running.
+
+Consumer installs should not default to sample features such as `bulk-tagging`. If no feature is provided and no isolated draft session can be resumed, `draft-open` should fail with a clear feature-slug-required message.
 
 ## `draft-cancel`
 
@@ -110,6 +136,8 @@ It:
 Cancel refuses to kill unknown processes or processes that only match by PID.
 
 Required product behavior: cancelling a draft should restore the pre-draft live baseline. DraftKit needs a baseline/isolation mechanism so `draft-cancel` can discard draft-session edits without reverting unrelated user work. If it cannot safely separate draft edits from pre-existing changes, it should block with a clear recovery path instead of reporting that the draft was cancelled while leaving the app changed.
+
+In the target model, `draft-cancel` deletes or discards the isolated draft workspace/overlay and leaves the live working tree unchanged.
 
 ## `draft-plan-to-go-live`
 

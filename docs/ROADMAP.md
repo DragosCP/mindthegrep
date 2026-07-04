@@ -22,7 +22,7 @@
 - Local ignored operational logs under `.draftspec/logs/`.
 - Generic DraftKit preview host for new feature slugs before a feature-specific example route exists.
 - Approval-gated go-live planning and fixture-backed implementation artifacts.
-- Resolve consumer manual acceptance findings from `docs/DRAFTKIT_MANUAL_ACCEPTANCE_FINDINGS.md`, starting with draft cancellation that restores the live baseline, draft isolation, and a dedicated DraftKit-owned draft preview port instead of reusing the live app port.
+- Resolve consumer manual acceptance findings from `docs/DRAFTKIT_MANUAL_ACCEPTANCE_FINDINGS.md`, starting with drafts based on live checkpoints, draft isolation, stale-draft detection when live moves, cancellation that restores the live baseline, and a dedicated DraftKit-owned draft preview port instead of reusing the live app port.
 - Future: package the buttons as a Codex plugin with optional hooks for draft/live guardrails.
 - Future: add Claude Code `/draft-*` wrappers if Claude support is in scope.
 

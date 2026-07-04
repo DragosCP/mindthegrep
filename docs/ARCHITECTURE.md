@@ -5,15 +5,19 @@
 DraftKit has four small parts:
 
 - `SpecGraph`: deterministic behavior graph for UI, workflow, fixtures, and backend hints.
-- `FakeBackend`: in-memory service adapter with the same semantic shape the real backend should later expose.
+- `FakeBackend`: current code name for the local draft data adapter. It is frontend-only draft behavior, not a product backend.
 - `BulkTaggingDraftFlow`: user workflow controller that records state transitions while mutating local draft state.
 - `BackendMapper`: converts an approved graph into backend implementation tasks.
 
 ## Invariants
 
 - Draft and live modes should share the same app shell.
-- Draft mode must not make network calls.
-- The fake backend must model success and failure paths.
+- Draft mode is frontend-only behavior and must not call real backend routes, production APIs, queues, migrations, or databases.
+- Local draft data adapters may use in-memory data, fixtures, localStorage, IndexedDB, or similar browser-local state to make the workflow feel real.
+- Local draft data adapters must model success and failure paths.
+- A draft session must be based on a specific live checkpoint.
+- Draft edits should be isolated from the live working tree through a worktree, sandbox, or overlay.
+- If the live checkpoint moves while a draft exists, the draft should be reported as stale until the user explicitly refreshes/rebases, continues from the old baseline, or cancels.
 - Spec serialization must be deterministic.
 - Backend mapping requires an approved spec.
 - Approval creates a content-addressed snapshot ID.
@@ -26,12 +30,31 @@ DraftKit has four small parts:
 ```text
 User click
   -> flow controller
-  -> fake backend/local state
+  -> local draft data adapter
   -> spec action event
   -> .draftspec graph
   -> approval snapshot
   -> backend task mapping
 ```
+
+## Draft And Live Isolation
+
+The final architecture should not treat draft mode as a flag inside one mutable folder. A draft is a temporary isolated workspace based on a live checkpoint.
+
+```text
+live baseline: commit/tree abc123
+draft session: isolated changes on top of abc123
+```
+
+This keeps product semantics clear:
+
+- live preview serves the stable app;
+- draft preview serves the isolated draft on a DraftKit-owned port;
+- cancel discards the isolated draft;
+- approval freezes the accepted behavior;
+- go-live maps approved behavior onto the current app intentionally.
+
+If the live app changes while a draft exists, DraftKit should not silently replay the draft on top of the new live state. It should mark the draft stale and require an explicit refresh/rebase/cancel decision.
 
 ## Session Runtime
 
@@ -45,7 +68,7 @@ User click
 
 The active mirror helps agents answer "what draft is open right now?" The session file is the durable runtime copy for that session. Status treats missing sessions, cwd drift, unhealthy previews, and dead recorded preview processes as stale state instead of silently trusting them.
 
-`draft-cancel` clears the active mirror, marks the session cancelled, appends history, and preserves draft and approved specs. It only stops a preview process when the recorded process identity still proves DraftKit started it.
+`draft-cancel` currently clears the active mirror, marks the session cancelled, appends history, and preserves draft and approved specs. It only stops a preview process when the recorded process identity still proves DraftKit started it. That is an MVP limitation. The target behavior is to discard the isolated draft workspace/overlay and restore the pre-draft live baseline without reverting unrelated user work.
 
 `draft-open <feature>` previews an existing example route at `examples/<feature>/` when present. For new feature slugs it uses the generic `/draftkit/<feature>/` host, which renders the current `.draftspec` scaffold instead of claiming a feature-specific route exists.
 
