@@ -23,6 +23,8 @@ Use the direct Node command for Codex Desktop, WSL, and Linux sessions. Do not r
 - If no plan exists, create one from the approved snapshot before implementing.
 - Implement only backend contracts named by the approved snapshot.
 - Do not use runtime state as authorization for backend edits.
+- Map approved product behavior onto the existing app backend/database architecture.
+- Do not use DraftKit go-live as a reason to switch backend or database architecture unless the user explicitly asks for that outside DraftKit.
 - In this repository, implementation targets `fixtures/backend-sandbox/` because there is no production backend.
 
 ## Output
@@ -30,4 +32,5 @@ Use the direct Node command for Codex Desktop, WSL, and Linux sessions. Do not r
 - Approved snapshot ID.
 - Plan path.
 - Implementation artifact path.
+- Any mismatch between the approved draft behavior and existing live architecture.
 - Verification commands or results.

@@ -1,6 +1,6 @@
 ---
 name: draft-integrate
-description: Implement real backend integration from an approved DraftKit .draftspec snapshot. Use after draft approval to map fake behavior onto existing backend routes, services, tests, and data models without duplicating routes.
+description: Implement real backend integration from an approved DraftKit .draftspec snapshot. Use after draft approval to map approved draft behavior onto existing backend routes, services, tests, and data models without duplicating routes or changing architecture unexpectedly.
 ---
 
 # Draft Integrate
@@ -16,6 +16,8 @@ For button-driven sessions, use `node ./scripts/draftkit-session.mjs implement-t
 - Inspect existing backend routes and services before adding new ones.
 - Prefer extending existing service boundaries over creating duplicate routes.
 - Implement only the backend contracts named by the approved snapshot.
+- Map behavior onto the app's existing backend/database architecture.
+- Do not use DraftKit integration as a reason to switch backend or database architecture unless the user explicitly asks for that outside DraftKit.
 - Add tests for success and failure paths, especially rollback semantics.
 
 ## Output
