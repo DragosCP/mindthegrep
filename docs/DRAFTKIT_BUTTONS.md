@@ -97,7 +97,7 @@ While draft mode is active, agents should keep work inside the existing app shel
 
 ## `draft-cancel`
 
-`draft-cancel` exits draft mode without deleting draft work.
+`draft-cancel` currently exits draft mode without deleting draft work. That is the current MVP behavior, not the final product contract.
 
 It:
 
@@ -108,6 +108,8 @@ It:
 - stops only a preview process DraftKit started and can still verify by identity
 
 Cancel refuses to kill unknown processes or processes that only match by PID.
+
+Required product behavior: cancelling a draft should restore the pre-draft live baseline. DraftKit needs a baseline/isolation mechanism so `draft-cancel` can discard draft-session edits without reverting unrelated user work. If it cannot safely separate draft edits from pre-existing changes, it should block with a clear recovery path instead of reporting that the draft was cancelled while leaving the app changed.
 
 ## `draft-plan-to-go-live`
 
