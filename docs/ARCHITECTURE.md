@@ -2,10 +2,12 @@
 
 ## Runtime
 
-DraftKit has four small parts:
+DraftKit has a small dependency-free core plus local session tooling:
 
 - `SpecGraph`: deterministic behavior graph for UI, workflow, fixtures, and backend hints.
-- `FakeBackend`: in-memory service adapter with the same semantic shape the real backend should later expose.
+- Local draft data adapters: in-memory, fixture, localStorage, IndexedDB, or
+  browser-local behavior that makes the draft feel real without becoming the
+  product backend.
 - `BulkTaggingDraftFlow`: user workflow controller that records state transitions while mutating local draft state.
 - `BackendMapper`: converts an approved graph into backend implementation tasks.
 - `draftkit-session`: local button runtime for opening, inspecting, cancelling,
@@ -16,8 +18,9 @@ DraftKit has four small parts:
 ## Invariants
 
 - Draft and live modes should share the same app shell.
-- Draft mode must not make network calls.
-- The fake backend must model success and failure paths.
+- Draft mode must not call real backend routes, production APIs, queues,
+  migrations, or databases.
+- Local draft adapters must model success and failure paths.
 - Spec serialization must be deterministic.
 - Backend mapping requires an approved spec.
 - Approval creates a content-addressed snapshot ID.
@@ -51,7 +54,7 @@ accepted constraints, and keep implementation details out of product UI.
 ```text
 User click
   -> flow controller
-  -> fake backend/local state
+  -> local draft data adapter/state
   -> spec action event
   -> .draftspec graph
   -> protected-file check

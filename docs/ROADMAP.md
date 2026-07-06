@@ -37,7 +37,24 @@
 - Future: package the buttons as a Codex plugin with optional hooks for
   draft/live guardrails.
 
-## 0.4 Backend Integration
+## 0.4 Packaging And Distribution
+
+- Replace the current repo-local install scaffold with a versioned package.
+- Target developer flow:
+
+  ```bash
+  npm install -D draftkit
+  npx draftkit init
+  ```
+
+- Keep runtime code in the package and generate small project-local skill
+  wrappers during init.
+- Document upgrade behavior so init can refresh wrappers/runtime files without
+  overwriting local product specs.
+- Make installer output explicit about Codex session reloads when local skills
+  are newly installed.
+
+## 0.5 Backend Integration
 
 - Generate integration plans from approved specs.
 - Compare generated routes/services against existing backend shape.

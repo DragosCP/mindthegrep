@@ -33,6 +33,10 @@ guidance lives in `.codex/skills/draft-*`.
   not enough.
 - Identity must match token, session ID, feature, process ID, and draft
   workspace cwd.
+- Port checks use the same host/bind behavior as the preview server and retry
+  instead of accepting an externally owned live port. This matters on
+  Windows/Codex Desktop, where a live server may occupy the all-interface port
+  even when a narrower localhost probe appears available.
 - `draft-status` is read-only and reports baseline, workspace, preview identity
   health, stale reasons, and next valid actions.
 - If live moves after draft open, status marks the draft stale and does not

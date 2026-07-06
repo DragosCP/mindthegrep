@@ -10,7 +10,8 @@ Let a builder feel a feature in the real app shell before backend code is commit
 
 ## MVP
 
-Build a dependency-free DraftKit runtime and one example flow:
+Build a dependency-free DraftKit runtime, a downstream-app bridge, and one
+example flow:
 
 - bulk select 20 items
 - open a tag dialog
@@ -20,20 +21,26 @@ Build a dependency-free DraftKit runtime and one example flow:
 - persist UI locations, states, actions, fixtures, and backend contract hints in `.draftspec`
 - freeze an approved behavior graph
 - map that graph to backend integration tasks
+- install project-local DraftKit skills and runtime commands into a downstream
+  app
+- open isolated draft sessions from a live baseline
+- serve draft previews on DraftKit-owned identity-verified ports
 
 ## Non-Goals
 
 - No real database.
 - No production auth.
-- No full plugin marketplace packaging.
+- No published npm package yet.
 - No multi-framework adapter layer yet.
 - No automatic GitHub PR creation unless network/auth is available.
 
 ## Success Criteria
 
 - The user can click through the workflow locally.
-- Draft mode never calls a real API.
+- Draft mode never calls real backend routes, production APIs, queues,
+  migrations, or databases.
 - Every meaningful action is represented in the graph.
 - Approval produces an immutable snapshot ID.
 - Backend mapping refuses unapproved specs.
-- Tests cover graph validation, flow replay, approval, and backend mapping.
+- Tests cover graph validation, flow replay, approval, backend mapping, draft
+  session isolation, preview identity, stale state, and cancellation.

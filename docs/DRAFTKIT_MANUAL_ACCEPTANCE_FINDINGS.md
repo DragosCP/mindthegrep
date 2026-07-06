@@ -32,6 +32,18 @@ The clean runtime:
 - marks status stale when identity is missing, dead, or mismatched;
 - stops a preview process only after identity matches.
 
+## Windows/Codex Desktop Follow-Up
+
+The first clean-branch smoke passed in WSL but failed in the Windows
+`xyz_ex` consumer test. The port probe checked a narrower localhost binding
+while the preview server later tried to bind the all-interface host, so the
+runtime still selected the live app's `5173` port.
+
+The final fix made preview probing and startup use the same explicit host,
+skip externally owned live ports, and retry until both preview identity and
+route health verify. Manual acceptance then passed with live on `5173` and
+draft on `5174`.
+
 ## Acceptance Requirements
 
 - Cancel must discard draft-session edits and leave unrelated live work intact.

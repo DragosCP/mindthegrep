@@ -4,7 +4,10 @@ This is the canonical protocol for turning a validated DraftKit prototype into l
 
 ## Purpose
 
-Draft mode exists so a builder can feel the workflow before backend code is committed. The live handoff starts only after the human approves the clicked-through draft. Until then, draft work stays in frontend code, fake adapters, local state, fixtures, and `.draftspec` artifacts.
+Draft mode exists so a builder can feel the workflow before backend code is
+committed. The live handoff starts only after the human approves the
+clicked-through draft. Until then, draft work stays in frontend code, local
+draft data adapters, browser-local state, fixtures, and `.draftspec` artifacts.
 
 ## Protocol
 
@@ -20,7 +23,7 @@ Draft mode exists so a builder can feel the workflow before backend code is comm
 
 3. Generate the backend integration plan.
    - Read only the approved snapshot.
-   - Convert deferred/fake backend behavior into concrete backend tasks.
+   - Convert deferred local draft behavior into concrete backend tasks.
    - Name the backend contracts, route hints, data model changes, and tests required.
 
 4. Inspect the existing backend.
@@ -30,7 +33,7 @@ Draft mode exists so a builder can feel the workflow before backend code is comm
 
 5. Implement live backend integration.
    - Implement only the backend contracts named by the approved snapshot.
-   - Replace fake/local draft behavior with real API-backed behavior.
+   - Replace local draft behavior with real API-backed behavior.
    - Keep the visible workflow equivalent to the approved draft unless the human reopens draft review.
 
 6. Verify live behavior against the approved draft.
@@ -78,6 +81,14 @@ Inside that app, capture the live baseline before draft edits:
 npm run draftkit:protect:snapshot
 ```
 
+Open and inspect a draft session:
+
+```bash
+npm run draftkit:open -- <feature>
+npm run draftkit:status
+npm run draftkit:cancel
+```
+
 Before draft review, verify the draft against that baseline:
 
 ```bash
@@ -86,6 +97,10 @@ npm run draftkit:protect:check
 ```
 
 The snapshot command belongs at the start of draft work, immediately after init or before the first draft edit. The check command belongs at review time. Do not create a fresh snapshot after draft changes just to make the check pass.
+
+The open command records a live baseline and creates an isolated DraftKit-owned
+workspace. The draft preview must run on a DraftKit-owned port with matching
+preview identity; a generic local HTTP response is not enough.
 
 The current repo still exposes the bulk-tagging vertical slice through scripts:
 
@@ -124,4 +139,5 @@ In the manual Todo sandbox, the draft board used localStorage for `Tasks`, `In p
 - replace localStorage draft status with API-backed status
 - verify that moving a task and reloading preserves the selected column
 
-The draft code is not the backend implementation. It is the approved behavior contract the backend must satisfy.
+The draft code is not the backend implementation. It is the approved behavior
+contract the backend must satisfy.
