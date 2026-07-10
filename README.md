@@ -1,7 +1,16 @@
-# Mind the Grep
+# Mind the Grep / DraftKit
 
-Mind the Grep is the DraftKit prototype: a draft-first agent workflow for
-trying product behavior before committing backend work.
+Mind the Grep is the DraftKit prototype: a simplified, repo-local version of
+the Draft mode idea from [Codex Canvas](https://github.com/DragosCP/codex-canvas).
+
+Codex Canvas explores a desktop workbench where builders can see a live app,
+ask an agent for the next feature, preview that feature as a temporary Draft,
+refine it visually, then approve or discard it before real backend, database,
+API, or infrastructure work happens.
+
+DraftKit keeps the same core product idea but strips it down to a portable
+runtime and project-local Codex skills. It is for trying product behavior
+before committing backend work.
 
 DraftKit gives Codex project-local buttons/skills plus a small runtime:
 
@@ -15,6 +24,26 @@ The bulk-tagging flow is the built-in sample. The reusable downstream-app
 bridge is the main product direction.
 
 The live handoff protocol is defined in [Draft To Live Handoff](docs/DRAFT_TO_LIVE.md).
+
+## Relationship To Codex Canvas
+
+Codex Canvas is the broader builder-facing shell: desktop app, live preview,
+draft preview, visual context, and future shared vocabulary for screens,
+panels, buttons, and flows.
+
+DraftKit is the smaller runtime experiment underneath that direction:
+
+- **Live baseline**: start from the current app instead of a detached mockup.
+- **Draft workspace**: make the next feature visible while it is still cheap to
+  change.
+- **Frontend-only behavior**: use local draft state, fixtures, or browser-local
+  persistence instead of production backend work.
+- **Approve or discard**: keep failed drafts easy to throw away.
+- **Draft-to-live handoff**: turn only approved behavior into implementation
+  planning and backend integration.
+
+The goal is not to fake production. The goal is to let the builder feel the
+workflow before the app pays the cost of real implementation.
 
 ## Verify This Repo
 
