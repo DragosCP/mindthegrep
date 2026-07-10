@@ -6,10 +6,10 @@
 
 - [ ] Relevant draft spec updated under `.draftspec/features/`
 - [ ] Approved snapshot regenerated when workflow behavior changed
-- [ ] Backend mapping reviewed before implementation work
+- [ ] Go-live plan or backend mapping reviewed before implementation work
 
 ## Verification
 
 - [ ] `npm test`
-- [ ] `npm run validate:spec`
-- [ ] `npm run map:bulk-tagging`
+- [ ] `npm run draftkit:validate`
+- [ ] Draft preview/cancel behavior checked when runtime behavior changed

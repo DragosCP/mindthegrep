@@ -161,7 +161,6 @@ export async function draftOpen(feature, options = {}) {
     (existingActive?.feature === safeFeature && existingActive?.sessionId) ||
     process.env.DRAFTKIT_SESSION_ID ||
     process.env.CODEX_SESSION_ID ||
-    process.env.OMX_SESSION_ID ||
     `draftkit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   if (existingActive?.feature === safeFeature && existingStatus.state === "stale") {
